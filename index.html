@@ -33,6 +33,7 @@ input{width:100%;min-height:60px;border-radius:14px;border:2px solid var(--line)
 .full{position:fixed;inset:0;background:var(--ok);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}.full div{font-size:90px}
 .er{color:var(--bad);font-size:18px}.dots{font-size:34px;text-align:center;min-height:56px;letter-spacing:8px}
 .kp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}.kp button{min-height:72px;font:inherit;font-size:28px;border:2px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink)}
+.mi{position:relative}.mi span{position:absolute;right:16px;top:15px;font-size:20px;color:var(--mut)}.mi input{padding-right:56px}.b.gy{background:#5b6f69}
 canvas{width:100%;background:#fff;border:2px solid var(--line);border-radius:14px;touch-action:none;margin-bottom:12px}
 table{width:100%;border-collapse:collapse;font-size:17px}td,th{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line)}td:first-child,th:first-child{text-align:left}
 .pos{color:var(--ok)}.neg{color:var(--bad)}
@@ -43,7 +44,10 @@ const DEN=[100000,50000,20000,10000,5000,2000,1000,500,100];
 let S={};try{S=JSON.parse(localStorage.getItem('cantina2'))||{}}catch(e){}
 for(const k of ['q','prob','ult','cat','cli','stk'])S[k]=S[k]||[];
 const save=()=>{try{localStorage.setItem('cantina2',JSON.stringify(S))}catch(e){}};
-const $=s=>document.querySelector(s),gs=n=>Math.round(n).toLocaleString('es-PY')+' Gs';
+const $=s=>document.querySelector(s),fm=n=>String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),gs=n=>fm(n)+' Gs';
+const monto=q=>parseInt(($(q).value||'').replace(/\D/g,''),10)||0;
+const fmtMi=el=>{const n=el.value.replace(/\D/g,'');el.value=n?fm(Number(n)):''};
+const mi=(id,v,ph)=>`<div class=mi><input id=${id} type=tel inputmode=numeric placeholder="${ph||'0'}" value="${v?fm(v):''}" oninput="fmtMi(this)"><span>Gs</span></div>`;
 const uid=()=>(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,12));
 const base=()=>String(window.CANTINA_API||S.api||'').replace(/\/$/,'');
 let V='boot',cart={},sel=null,cash={},cnt={},pin='',err='',msg='',cb=null,res=null,usr=[],pend=null,offConf=false,ptitle='',pback='users',psign=false,backTo='home',syncing=false,comp=null,pin1='';
@@ -126,7 +130,7 @@ function entrar(){
   if(S.turno.user_id===S.user.id||S.user.rol==='admin')go('home');else go('otro');
 }
 async function abrirTurno(){
-  const fondo=+$('#f').value||0;msg='Abriendo turno…';go('wait');
+  const fondo=monto('#f');msg='Abriendo turno…';go('wait');
   try{await api('/api/turnos/abrir',{method:'POST',body:JSON.stringify({fondo})});await refrescar();go('home')}catch(e){msg=e.message;backTo='fondo';go('err')}
 }
 function salir(){S.token=null;S.user=null;S.exp=false;save();loadUsers()}
@@ -178,7 +182,7 @@ function fin(op,r){
   else S.last=null;
   msg=`${gs(t)} ${op.tipo==='pago'?'cobrado':b.tipo==='contado'?'al contado':'a crédito'}${r?'':' · se enviará al volver internet'}`;
   comp=b.cliente_id?{tipo:op.tipo,cid:b.cliente_id,t,conf:b.cliente_pin?'PIN':'firma',fecha:Date.now(),
-    lin:op.tipo==='venta'?b.lineas.map(l=>{const p=S.cat.find(x=>x.id==l.producto_id);return `${l.cantidad} × ${p.nombre} × ${p.precio.toLocaleString('es-PY')}`}):[]}:null;
+    lin:op.tipo==='venta'?b.lineas.map(l=>{const p=S.cat.find(x=>x.id==l.producto_id);return `${l.cantidad} × ${p.nombre} × ${fm(p.precio)}`}):[]}:null;
   cart={};save();go('ok');if(!comp)setTimeout(()=>{if(V==='ok')go('home')},1400);
   if(r)refrescar().then(est);else sync();
 }
@@ -208,6 +212,20 @@ function enviarWA(){
     :`*Cantina · Comprobante de pago*\nCliente: ${c.nombre}\nFecha: ${f}\nRecibimos: *${gs(comp.t)}*\nSaldo actual: ${gs(c.saldo)}\nConfirmado con ${comp.conf}.`;
   let n=String(c.telefono||'').replace(/\D/g,'');if(n.startsWith('0'))n='595'+n.slice(1);
   window.open(`https://wa.me/${n}?text=${encodeURIComponent(txt)}`,'_blank');
+}
+async function gastoOk(){
+  const concepto=$('#gc').value.trim(),m=monto('#gm');
+  if(concepto.length<3||m<=0){$('#ge').textContent='Escribí en qué se gastó y el monto';return}
+  const op={tipo:'gasto',path:'/api/gastos',body:{client_uuid:uid(),monto:m,concepto}};
+  if(navigator.onLine&&!S.q.length){
+    try{msg='Registrando…';go('wait');const r=await api(op.path,{method:'POST',body:JSON.stringify(op.body)});return finG(op,r)}
+    catch(e){if(!e.net){msg=e.message;backTo='gasto';return go('err')}}
+  }
+  S.q.push(op);finG(op,null);
+}
+function finG(op,r){
+  comp=null;S.last=null;msg=`Gasto de ${gs(op.body.monto)} registrado`+(r?'':' · se enviará al volver internet');
+  save();go('ok');setTimeout(()=>{if(V==='ok')go('home')},1400);if(r)refrescar().then(est);else sync();
 }
 function sigInit(){
   const c=$('#sg'),x=c.getContext('2d');if(!x)return;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.lineWidth=4;x.lineCap='round';x.strokeStyle='#000';
@@ -241,21 +259,22 @@ fail:()=>`<h1>No hay conexión</h1><p class=er>${msg}</p><button class=b onclick
 setup:()=>`<h1>Primera vez</h1><p class=mut>Escribí la dirección del servidor (te la da el administrador).</p><input id=u placeholder="https://cantina-api….onrender.com"><button class="b ok" onclick="const v=$('#u').value.trim();if(/^https?:\\/\\//.test(v)){S.api=v;save();loadUsers()}">Guardar</button>`,
 users:()=>`<h1>¿Quién atiende?</h1>${usr.map((u,i)=>`<button class=b onclick="pickUser(${i})">${u.nombre}</button>`).join('')}`,
 pin:()=>`${hd(ptitle,pback)}${err?`<p class=er>${err}</p>`:''}<div class=dots>${'●'.repeat(pin.length)||'&nbsp;'}</div><div class=kp>${[1,2,3,4,5,6,7,8,9,'⌫',0,'✓'].map(k=>`<button onclick="key('${k}')">${k}</button>`).join('')}</div>${psign?`<button class="b ghost" onclick="go('firma')">Prefiere firmar</button>`:''}`,
-fondo:()=>`<h1>Empezar turno</h1><p>${S.user.nombre}, ¿con cuánto efectivo empezás?</p><input id=f type=tel value=100000><button class="b ok" onclick="abrirTurno()">Empezar turno</button><button class="b ghost" onclick="salir()">Cambiar de usuario</button>`,
+fondo:()=>`<h1>Empezar turno</h1><p>${S.user.nombre}, ¿con cuánto efectivo empezás?</p>${mi('f',100000)}<button class="b ok" onclick="abrirTurno()">Empezar turno</button><button class="b ghost" onclick="salir()">Cambiar de usuario</button>`,
 otro:()=>`<h1>Turno abierto</h1><p>Hay un turno abierto de <b>${S.turno.empleada}</b>. Tiene que cerrar su caja antes de que vos empieces.</p><button class=b onclick="salir()">Volver</button>`,
-home:()=>`<h1>Hola, ${S.user.nombre}</h1><button class="b ok" onclick="cart={};go('sell')">🛒 Vender</button><button class="b cr" onclick="go('debts')">💰 Cobrar deuda</button><button class=b onclick="go('stock')">📦 Stock</button><button class="b bad" onclick="cash={};cnt={};go('c1')">🔴 Cerrar caja</button>${S.last?`<button class="b ghost" onclick="undo()">Deshacer última venta</button>`:''}`,
+home:()=>`<h1>Hola, ${S.user.nombre}</h1><button class="b ok" onclick="cart={};go('sell')">🛒 Vender</button><button class="b cr" onclick="go('debts')">💰 Cobrar deuda</button><button class="b gy" onclick="go('gasto')">🧾 Cargar gasto</button><button class=b onclick="go('stock')">📦 Stock</button><button class="b bad" onclick="cash={};cnt={};go('c1')">🔴 Cerrar caja</button>${S.last?`<button class="b ghost" onclick="undo()">Deshacer última venta</button>`:''}`,
 sell:()=>`${hd('Vender','home')}<div class=grid>${S.cat.map(p=>{const q=cart[p.id]||0;return `<div class="tile ${q?'on':''}" onclick="add(${p.id},1)"><b>${p.nombre}</b><span>${gs(p.precio)}</span>${q?`<i class=q>${q}</i><button class=m onclick="event.stopPropagation();add(${p.id},-1)">−</button>`:''}</div>`}).join('')}</div><div class=bar><div><small>Total</small><strong>${gs(cartT())}</strong></div><button class=b ${cartT()?'':'disabled'} onclick="go('how')">Cobrar</button></div>`,
 how:()=>`${hd('¿Cómo paga?','sell')}<p>Total: <b>${gs(cartT())}</b></p><button class="b ok" onclick="vender('contado')">Contado</button><button class="b cr" onclick="vender('credito')">Crédito</button>`,
 client:()=>`${hd('¿A quién se fía?','how')}${S.cli.map(c=>`<div class=row onclick="elegirCliente(${c.id})"><div>${c.nombre}</div><small>debe ${gs(c.saldo)}</small></div>`).join('')}<input id=nc placeholder="Cliente nuevo: nombre"><input id=np type=tel placeholder="Teléfono (opcional)"><button class="b ghost" onclick="nuevoCliente()">Agregar y fiar</button>`,
 firma:()=>`${hd('Firma del cliente',pend&&pend.tipo==='pago'?'debt':'client')}${err?`<p class=er>${err}</p>`:''}<p class=mut>${sel.nombre}, firmá con el dedo.${offConf?' (Sin conexión: se confirma con firma.)':''}</p><canvas id=sg width=600 height=260></canvas><button class="b ok" onclick="sigOk()">Confirmar</button><button class="b ghost" onclick="go('firma')">Borrar firma</button>${!offConf&&navigator.onLine?(sel.tiene_pin?`<button class="b ghost" onclick="usarPin()">Usar el PIN del cliente</button>`:`<button class="b ghost" onclick="crearPin()">Crear un PIN para el cliente</button>`):''}`,
 ok:()=>`<div class=full><div>✓</div><h1>Registrado</h1><p>${msg}</p>${comp?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="enviarWA()">Enviar comprobante por WhatsApp</button><button class="b ghost" style="color:#fff;border-color:#fff;max-width:360px" onclick="comp=null;go('home')">Listo</button>`:''}</div>`,
 debts:()=>{const l=S.cli.filter(c=>c.saldo>0);return `${hd('Cobrar deuda','home')}${l.map(c=>`<div class=row onclick="sel=S.cli.find(x=>x.id===${c.id});go('debt')"><div>${c.nombre}</div><b>${gs(c.saldo)}</b></div>`).join('')||'<p>Nadie debe nada 🎉</p>'}`},
-debt:()=>`${hd(sel.nombre,'debts')}<p>Debe <b>${gs(sel.saldo)}</b></p><button class="b ok" onclick="pagar(${sel.saldo})">Pagó todo</button><input id=pa type=tel placeholder="Pago parcial (Gs)"><button class="b ghost" onclick="const m=+$('#pa').value;if(m>0&&m<=sel.saldo)pagar(m)">Registrar pago parcial</button>`,
+debt:()=>`${hd(sel.nombre,'debts')}<p>Debe <b>${gs(sel.saldo)}</b></p><button class="b ok" onclick="pagar(${sel.saldo})">Pagó todo</button>${mi('pa',0,'Pago parcial')}<button class="b ghost" onclick="const m=monto('#pa');if(m>0&&m<=sel.saldo)pagar(m)">Registrar pago parcial</button>`,
+gasto:()=>`${hd('Gasto de caja','home')}<p class=mut>Anotá lo que se pagó con plata de la caja.</p><input id=gc placeholder="¿En qué se gastó? (ej: hielo)">${mi('gm',0,'Monto')}<p id=ge class=er></p><button class="b ok" onclick="gastoOk()">Registrar gasto</button>`,
 stock:()=>`${hd('Stock','home')}${S.stk.map(i=>`<div class=row style="cursor:default"><span class=dot style="background:var(${i.stock<=0?'--bad':i.stock<=i.minimo?'--cr':'--ok'})"></span><div>${i.nombre}</div><b>${i.stock}</b></div>`).join('')}`,
 c1:()=>{const t=DEN.reduce((s,d)=>s+d*(cash[d]||0),0);return `${hd('Cerrar caja: efectivo','home')}<p>Contá billetes y monedas.</p>${DEN.map(d=>`<div class=row style="cursor:default"><div>${gs(d)}</div><div class=st><button onclick="cc(${d},-1)">−</button><b>${cash[d]||0}</b><button onclick="cc(${d},1)">+</button></div></div>`).join('')}<div class=bar><div><small>Contado</small><strong>${gs(t)}</strong></div><button class=b onclick="go('c2')">Seguir</button></div>`},
 c2:()=>`${hd('Cerrar caja: mercadería','c1')}<p>Contá lo que queda.</p>${S.stk.map(i=>`<div class=row style="cursor:default"><div>${i.nombre}</div><div class=st><button onclick="ci(${i.id},-${pasoDe(i)})">−</button><b>${cnt[i.id]||0}</b><button onclick="ci(${i.id},${pasoDe(i)})">+</button></div></div>`).join('')}<div class=bar><div></div><button class="b bad" onclick="cerrar()">Cerrar y ver resultado</button></div>`,
-c3:()=>`<h1>Resultado del cierre</h1><div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas</td><td>${gs(res.cobros)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div><div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div><button class="b ok" onclick="salir()">Terminar</button>`,
-prob:()=>`${hd('Sin registrar','home')}<p class=mut>Estas operaciones no se pudieron registrar. Avisale al administrador.</p>${S.prob.map(p=>`<div class=row style="display:block;cursor:default"><b>${p.tipo==='venta'?'Venta':'Cobro'}</b> · ${new Date(p.fecha).toLocaleString('es-PY')}<div class=er>${p.error}</div></div>`).join('')}<button class=b onclick="S.prob=[];save();go('home')">Entendido</button>`
+c3:()=>`<h1>Resultado del cierre</h1><div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas</td><td>${gs(res.cobros)}</td></tr><tr><td>Gastos de caja</td><td>−${gs(res.gastos||0)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div><div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div><button class="b ok" onclick="salir()">Terminar</button>`,
+prob:()=>`${hd('Sin registrar','home')}<p class=mut>Estas operaciones no se pudieron registrar. Avisale al administrador.</p>${S.prob.map(p=>`<div class=row style="display:block;cursor:default"><b>${p.tipo==='venta'?'Venta':p.tipo==='pago'?'Cobro':'Gasto'}</b> · ${new Date(p.fecha).toLocaleString('es-PY')}<div class=er>${p.error}</div></div>`).join('')}<button class=b onclick="S.prob=[];save();go('home')">Entendido</button>`
 };
 function R(){
   $('#app').innerHTML=(W[V]||W.boot)();
