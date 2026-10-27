@@ -150,7 +150,7 @@ function fx(b,s){
 }
 function vender(t){
   pend={tipo:'venta',body:{tipo:t,lineas:lineas()}};
-  if(t==='contado'){offConf=!navigator.onLine;confirmar({})}else go('client');
+  if(t==='contado')go('medio');else go('client');
 }
 async function elegirCliente(id){sel=S.cli.find(c=>c.id===id);pend.body.cliente_id=id;await irConf()}
 async function nuevoCliente(){
@@ -183,7 +183,7 @@ function fin(op,r){
   const b=op.body,t=op.tipo==='venta'?b.lineas.reduce((s,l)=>s+l.cantidad*S.cat.find(p=>p.id==l.producto_id).precio,0):b.monto;
   if(op.tipo==='venta'){S.last={uuid:b.client_uuid,tipo:'venta',fx:{lineas:b.lineas,tipo:b.tipo,cliente_id:b.cliente_id}};if(r){S.ult.push({uuid:b.client_uuid,id:r.id});S.ult=S.ult.slice(-20)}}
   else S.last=null;
-  msg=`${gs(t)} ${op.tipo==='pago'?'cobrado':b.tipo==='contado'?'al contado':'a crédito'}${r?'':' · se enviará al volver internet'}`;
+  msg=`${gs(t)} ${op.tipo==='pago'?'cobrado':b.tipo==='contado'?'al contado':'a crédito'}${b.medio&&b.medio!=='efectivo'?' · '+MN[b.medio]:''}${r?'':' · se enviará al volver internet'}`;
   comp=b.cliente_id?{tipo:op.tipo,cid:b.cliente_id,t,conf:b.cliente_pin?'PIN':'firma',fecha:Date.now(),
     lin:op.tipo==='venta'?b.lineas.map(l=>{const p=S.cat.find(x=>x.id==l.producto_id);return `${l.cantidad} × ${p.nombre} × ${fm(p.precio)}`}):[]}:null;
   cart={};save();go('ok');if(!comp)setTimeout(()=>{if(V==='ok')go('home')},1400);
@@ -199,7 +199,10 @@ async function undo(){
   }
   fx(L.fx,-1);S.last=null;save();go('home');
 }
-function pagar(m){pend={tipo:'pago',body:{cliente_id:sel.id,monto:m}};irConf()}
+function pagar(m){pend={tipo:'pago',body:{cliente_id:sel.id,monto:m}};go('medio')}
+const MEDIOS=[['efectivo','💵 Efectivo','ok'],['pos_debito','💳 POS Débito',''],['pos_credito','💳 POS Crédito',''],['transferencia','🏦 Transferencia','gy']];
+const MN=Object.fromEntries(MEDIOS.map(x=>[x[0],x[1].slice(3)]));
+function medioPago(k){pend.body.medio=k;if(pend.tipo==='venta'){offConf=!navigator.onLine;confirmar({})}else irConf()}
 function usarPin(){err='';pinScr(sel.nombre+', ingresá tu PIN','client',p=>confirmar({cliente_pin:p}),true)}
 function crearPin(m){err=m||'';pinScr(sel.nombre+', elegí un PIN de 4 a 8 números (que lo escriba el cliente)','client',p=>{pin1=p;pinScr('Repetí el PIN','client',guardarPin)})}
 async function guardarPin(p){
@@ -267,6 +270,7 @@ otro:()=>`<h1>Turno abierto</h1><p>Hay un turno abierto de <b>${S.turno.empleada
 home:()=>`<h1>Hola, ${S.user.nombre}</h1><button class="b ok" onclick="cart={};go('sell')">🛒 Vender</button><button class="b cr" onclick="go('debts')">💰 Cobrar deuda</button><button class="b gy" onclick="go('gasto')">🧾 Cargar gasto</button><button class=b onclick="go('stock')">📦 Stock</button><button class="b bad" onclick="cash={};cnt={};go('c1')">🔴 Cerrar caja</button>${S.last?`<button class="b ghost" onclick="undo()">Deshacer última venta</button>`:''}`,
 sell:()=>`${hd('Vender','home')}<div class=grid>${S.cat.map(p=>{const q=cart[p.id]||0;return `<div class="tile ${q?'on':''}" onclick="add(${p.id},1)"><b>${p.nombre}</b><span>${gs(p.precio)}</span>${q?`<i class=q>${q}</i><button class=m onclick="event.stopPropagation();add(${p.id},-1)">−</button>`:''}</div>`}).join('')}</div><div class=bar><div><small>Total</small><strong>${gs(cartT())}</strong></div><button class=b ${cartT()?'':'disabled'} onclick="go('how')">Cobrar</button></div>`,
 how:()=>`${hd('¿Cómo paga?','sell')}<p>Total: <b>${gs(cartT())}</b></p><button class="b ok" onclick="vender('contado')">Contado</button><button class="b cr" onclick="vender('credito')">Crédito</button>`,
+medio:()=>`${hd('¿Con qué paga?',pend.tipo==='venta'?'how':'debt')}<p>Total: <b>${gs(pend.tipo==='venta'?cartT():pend.body.monto)}</b></p>${MEDIOS.map(x=>`<button class="b ${x[2]}" onclick="medioPago('${x[0]}')">${x[1]}</button>`).join('')}`,
 client:()=>`${hd('¿A quién se fía?','how')}${S.cli.map(c=>`<div class=row onclick="elegirCliente(${c.id})"><div>${c.nombre}</div><small>debe ${gs(c.saldo)}</small></div>`).join('')}<input id=nc placeholder="Cliente nuevo: nombre"><input id=np type=tel placeholder="Teléfono (opcional)"><button class="b ghost" onclick="nuevoCliente()">Agregar y fiar</button>`,
 firma:()=>`${hd('Firma del cliente',pend&&pend.tipo==='pago'?'debt':'client')}${err?`<p class=er>${err}</p>`:''}<p class=mut>${sel.nombre}, firmá con el dedo.${offConf?' (Sin conexión: se confirma con firma.)':''}</p><canvas id=sg width=600 height=260></canvas><button class="b ok" onclick="sigOk()">Confirmar</button><button class="b ghost" onclick="go('firma')">Borrar firma</button>${!offConf&&navigator.onLine?(sel.tiene_pin?`<button class="b ghost" onclick="usarPin()">Usar el PIN del cliente</button>`:`<button class="b ghost" onclick="crearPin()">Crear un PIN para el cliente</button>`):''}`,
 ok:()=>`<div class=full><div>✓</div><h1>Registrado</h1><p>${msg}</p>${comp?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="enviarWA()">Enviar comprobante por WhatsApp</button><button class="b ghost" style="color:#fff;border-color:#fff;max-width:360px" onclick="comp=null;go('home')">Listo</button>`:''}</div>`,
@@ -276,7 +280,7 @@ gasto:()=>`${hd('Gasto de caja','home')}<p class=mut>Anotá lo que se pagó con 
 stock:()=>`${hd('Stock','home')}${S.stk.map(i=>`<div class=row style="cursor:default"><span class=dot style="background:var(${i.stock<=0?'--bad':i.stock<=i.minimo?'--cr':'--ok'})"></span><div>${i.nombre}</div><b>${i.stock}</b></div>`).join('')}`,
 c1:()=>{const t=DEN.reduce((s,d)=>s+d*(cash[d]||0),0);return `${hd('Cerrar caja: efectivo','home')}<p>Contá billetes y monedas.</p>${DEN.map(d=>`<div class=row style="cursor:default"><div>${gs(d)}</div><div class=st><button onclick="cc(${d},-1)">−</button><b>${cash[d]||0}</b><button onclick="cc(${d},1)">+</button></div></div>`).join('')}<div class=bar><div><small>Contado</small><strong>${gs(t)}</strong></div><button class=b onclick="go('c2')">Seguir</button></div>`},
 c2:()=>`${hd('Cerrar caja: mercadería','c1')}<p>Contá lo que queda.</p>${S.stk.map(i=>`<div class=row style="cursor:default"><div>${i.nombre}</div><div class=st><button onclick="ci(${i.id},-${pasoDe(i)})">−</button><b>${cnt[i.id]||0}</b><button onclick="ci(${i.id},${pasoDe(i)})">+</button></div></div>`).join('')}<div class=bar><div></div><button class="b bad" onclick="cerrar()">Cerrar y ver resultado</button></div>`,
-c3:()=>`<h1>Resultado del cierre</h1><div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas</td><td>${gs(res.cobros)}</td></tr><tr><td>Gastos de caja</td><td>−${gs(res.gastos||0)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div><div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div><button class="b ok" onclick="salir()">Terminar</button>`,
+c3:()=>`<h1>Resultado del cierre</h1><div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado (efectivo)</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas (efectivo)</td><td>${gs(res.cobros)}</td></tr><tr><td>Gastos de caja</td><td>−${gs(res.gastos||0)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div>${Object.keys(res.otros_medios||{}).length?`<div class=row style="display:block;cursor:default"><small>Cobrado por otros medios (no está en la caja)</small><table>${Object.entries(res.otros_medios).map(([k,v])=>`<tr><td>${MN[k]||k}</td><td>${gs(v)}</td></tr>`).join('')}</table></div>`:''}<div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div><button class="b ok" onclick="salir()">Terminar</button>`,
 prob:()=>`${hd('Sin registrar','home')}<p class=mut>Estas operaciones no se pudieron registrar. Avisale al administrador.</p>${S.prob.map(p=>`<div class=row style="display:block;cursor:default"><b>${p.tipo==='venta'?'Venta':p.tipo==='pago'?'Cobro':'Gasto'}</b> · ${new Date(p.fecha).toLocaleString('es-PY')}<div class=er>${p.error}</div></div>`).join('')}<button class=b onclick="S.prob=[];save();go('home')">Entendido</button>`
 };
 function R(){
