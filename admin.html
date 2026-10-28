@@ -28,7 +28,8 @@ const base=()=>String(window.CANTINA_API||S.api||'').replace(/\/$/,'');
 const MN={efectivo:'Efectivo',pos_debito:'POS Débito',pos_credito:'POS Crédito',transferencia:'Transferencia'};
 const hh=x=>x?new Date(x).toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
 const num=v=>Number(String(v).replace(/\./g,'').replace(',','.'));
-let T='hoy',F='',IT=[],PR=[],US=[],usr=[],sel=null;
+const dec=v=>Number(String(v).trim().replace(',','.'));
+let T='hoy',F='',FK='',AF='',ED=null,REC={RE:[],RN:[]},IT=[],PR=[],US=[],usr=[],sel=null;
 async function A(path,opt={}){
   const h={...(S.token?{Authorization:'Bearer '+S.token}:{}),...(opt.body&&!(opt.body instanceof FormData)?{'Content-Type':'application/json'}:{})};
   let r;try{r=await fetch(base()+path,{...opt,headers:h})}catch(e){throw new Error('Sin conexión con el servidor')}
@@ -61,20 +62,27 @@ async function show(t){
 
 /* ---- acciones ---- */
 function an(tipo,id){const m=prompt('Motivo de la anulación (mínimo 3 letras)');if(!m||m.trim().length<3)return;run(()=>post(`/api/${tipo}/${id}/anular`,{motivo:m.trim()}))}
-function ajuste(id,motivo){const q=num(prompt(motivo==='entrada'?'¿Cuánto entró?':'¿Cuánto se perdió (merma)?')||'');if(q>0)run(()=>post('/api/admin/stock/ajuste',{item_id:id,cantidad:q,motivo}))}
+function ajuste(id,motivo){const q=dec(prompt(motivo==='entrada'?'¿Cuánto entró?':'¿Cuánto se perdió (merma)?')||'');if(q>0)run(()=>post('/api/admin/stock/ajuste',{item_id:id,cantidad:q,motivo}))}
 function itemNuevo(){const n=$('#in').value.trim();if(n.length<2)return alert('Falta el nombre');
-  run(()=>post('/api/admin/items',{nombre:n,unidad:$('#iu').value||'unidad',stock:num($('#is').value||0),minimo:num($('#im').value||0),paso:num($('#ip').value||1)}))}
-function parseRec(txt){
-  return txt.split(/[;|]/).map(x=>x.trim()).filter(Boolean).map(p=>{
-    const i=p.lastIndexOf(':'),nom=(i>0?p.slice(0,i):p).trim(),c=i>0?num(p.slice(i+1)):1;
-    const it=IT.find(x=>x.nombre.toLowerCase()===nom.toLowerCase());
-    if(!it)throw new Error(`No existe el item "${nom}"`);if(!(c>0))throw new Error('Cantidad inválida en '+nom);
-    return{item_id:it.id,cantidad:c}})}
+  run(()=>post('/api/admin/items',{nombre:n,unidad:$('#iu').value||'unidad',stock:dec($('#is').value||0),minimo:dec($('#im').value||0),paso:dec($('#ip').value||1)}))}
+function recEd(n){
+  return `<table><tr><th>Item</th><th>Cantidad por unidad vendida</th><th>Unidad</th><th></th></tr>${REC[n].map((r,i)=>{const it=IT.find(x=>x.id==r.item_id);return `<tr><td><select onchange="recSet('${n}',${i},'item_id',this.value)"><option value="">Elegir item…</option>${IT.map(x=>`<option value=${x.id} ${x.id==r.item_id?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select></td><td><input size=7 inputmode=decimal value="${esc(r.cantidad)}" onchange="recSet('${n}',${i},'cantidad',this.value)"></td><td class=mut>${it?esc(it.unidad):''}</td><td><button class="bt s r" onclick="recDel('${n}',${i})">✕</button></td></tr>`}).join('')}</table><button class="bt s" onclick="recAdd('${n}')">+ Agregar item</button>`}
+const recDraw=n=>{const e=$('#rec_'+n);if(e)e.innerHTML=recEd(n)};
+function recSet(n,i,f,v){REC[n][i][f]=v;if(f==='item_id')recDraw(n)}
+function recAdd(n){REC[n].push({item_id:'',cantidad:'1'});recDraw(n)}
+function recDel(n,i){REC[n].splice(i,1);recDraw(n)}
+function recOut(n){const o=[],v=new Set();
+  for(const r of REC[n]){if(!r.item_id)continue;const c=dec(r.cantidad);
+    if(!(c>0))throw new Error('Hay una cantidad inválida en la receta');
+    if(v.has(+r.item_id))throw new Error('Hay un item repetido en la receta');
+    v.add(+r.item_id);o.push({item_id:+r.item_id,cantidad:c})}
+  return o}
 const recTxt=p=>p.receta.map(r=>`${(IT.find(i=>i.id===r.item_id)||{nombre:'?'}).nombre}:${r.cantidad}`).join('; ');
 function prNuevo(){const n=$('#pn').value.trim(),pr=num($('#pp').value||0);if(n.length<2||!(pr>=0))return alert('Falta nombre o precio');
-  run(async()=>post('/api/admin/productos',{nombre:n,precio:pr,receta:parseRec($('#pr').value)}))}
+  run(async()=>{await post('/api/admin/productos',{nombre:n,precio:pr,receta:recOut('RN')});REC.RN=[]})}
 function prPrecio(id){const p=PR.find(x=>x.id===id),v=prompt('Nuevo precio de '+p.nombre,p.precio);if(v!==null&&num(v)>=0)run(()=>post('/api/admin/productos/'+id,{precio:num(v)},'PATCH'))}
-function prRec(id){const p=PR.find(x=>x.id===id),v=prompt('Receta (Item:cantidad; Item:cantidad)',recTxt(p));if(v!==null)run(async()=>post('/api/admin/productos/'+id,{receta:parseRec(v)},'PATCH'))}
+function prRec(id){const p=PR.find(x=>x.id===id);ED=id;REC.RE=p.receta.map(r=>({item_id:r.item_id,cantidad:String(r.cantidad)}));show('prod')}
+function edGuardar(){run(async()=>{await post('/api/admin/productos/'+ED,{receta:recOut('RE')},'PATCH');ED=null})}
 function prAct(id,a){run(()=>post('/api/admin/productos/'+id,{activo:a},'PATCH'))}
 function usNuevo(){const n=$('#un').value.trim(),p=$('#up').value.trim();if(n.length<2||p.length<4)return alert('Falta nombre o PIN');
   run(()=>post('/api/admin/usuarios',{nombre:n,pin:p,rol:$('#ur').value}))}
@@ -92,13 +100,15 @@ const V={
 hoy:async()=>{
   const d=await A('/api/admin/movimientos'+(F?'?fecha='+F:''));
   const rows=[
-    ...d.ventas.map(v=>({k:'ventas',id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', '),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
-    ...d.pagos.map(p=>({k:'pagos',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente,m:p.monto,a:p.anulado})),
-    ...d.gastos.map(g=>({k:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))
-  ].sort((a,b)=>a.f<b.f?-1:1);
+    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', '),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
+    ...d.pagos.map(p=>({k:'pagos',cat:'cobros',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente,m:p.monto,a:p.anulado})),
+    ...d.gastos.map(g=>({k:'gastos',cat:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))
+  ].filter(r=>!FK||r.cat===FK).sort((a,b)=>a.f<b.f?-1:1);
   const hoy=new Date().toLocaleDateString('en-CA');
+  const KP=[['contado','Ventas contado',d.total_contado],['credito','Ventas a crédito',d.total_credito],['cobros','Cobros de deudas',d.total_cobros],['gastos','Gastos de caja',d.total_gastos]];
   return `<div class=bar><input type=date id=fd value="${F||hoy}" onchange="F=this.value;show('hoy')"><span class=mut>${d.anuladas} anulada(s)</span></div>
-  <div class=kp><div class=cd><small>Ventas contado</small><b>${gs(d.total_contado)}</b></div><div class=cd><small>Ventas a crédito</small><b>${gs(d.total_credito)}</b></div><div class=cd><small>Cobros de deudas</small><b>${gs(d.total_cobros)}</b></div><div class=cd><small>Gastos de caja</small><b>${gs(d.total_gastos)}</b></div></div>
+  <div class=kp>${KP.map(([k,n,v])=>`<div class=cd onclick="FK=FK==='${k}'?'':'${k}';show('hoy')" style="cursor:pointer;${FK===k?'border:2px solid var(--ok);background:var(--okbg)':''}"><small>${n}</small><b>${gs(v)}</b></div>`).join('')}</div>
+  ${FK?`<p class=mut>Mostrando solo: <b>${KP.find(x=>x[0]===FK)[1]}</b> · tocá la tarjeta otra vez para ver todo</p>`:'<p class=mut><small>Tocá una tarjeta para filtrar el detalle.</small></p>'}
   <div class=cd><b>Cobrado por medio</b> (contado + cobros)<table>${Object.entries(d.por_medio).map(([k,v])=>`<tr><td>${MN[k]}</td><td class=n>${gs(v)}</td></tr>`).join('')}</table></div>
   <div class=cd><table><tr><th>Hora</th><th>Quién</th><th>Detalle</th><th class=n>Monto</th><th></th></tr>${rows.map(r=>`<tr class="${r.a?'an':''}"><td>${hh(r.f).slice(-5)}</td><td>${esc(r.e)}</td><td><b>${esc(r.t)}</b><br><small class=mut>${esc(r.x)}${r.a?' · ANULADA'+(r.mo?': '+esc(r.mo):''):''}</small></td><td class=n>${gs(r.m)}</td><td>${r.a?'':`<button class="bt s r" onclick="an('${r.k}',${r.id})">Anular</button>`}</td></tr>`).join('')||'<tr><td colspan=5>Sin movimientos</td></tr>'}</table></div>`},
 turnos:async()=>{
@@ -110,8 +120,8 @@ stock:async()=>{
   <h2>Item nuevo</h2><div class=cd><input id=in placeholder="Nombre"><input id=iu placeholder="Unidad (unidad, litro, kilo…)"><input id=is placeholder="Stock inicial" size=10><input id=im placeholder="Mínimo" size=8><input id=ip placeholder="Paso botones (1)" size=10><button class="bt ok" onclick="itemNuevo()">Agregar</button></div>`},
 prod:async()=>{
   [IT,PR]=await Promise.all([A('/api/stock'),A('/api/admin/productos')]);
-  return `<div class=cd><table><tr><th>Producto</th><th class=n>Precio</th><th>Receta (lo que descuenta)</th><th></th></tr>${PR.map(p=>`<tr class="${p.activo?'':'an'}"><td><b>${esc(p.nombre)}</b>${p.activo?'':' <small>(desactivado)</small>'}</td><td class=n>${gs(p.precio)}</td><td><small class=mut>${esc(recTxt(p))||'—'}</small></td><td class=n><button class="bt s" onclick="prPrecio(${p.id})">Precio</button> <button class="bt s" onclick="prRec(${p.id})">Receta</button> <button class="bt s" onclick="prAct(${p.id},${!p.activo})">${p.activo?'Desactivar':'Activar'}</button></td></tr>`).join('')}</table></div>
-  <h2>Producto nuevo</h2><div class=cd><input id=pn placeholder="Nombre"><input id=pp placeholder="Precio" size=10><input id=pr placeholder="Receta: Café (medidas):1; Leche:0,2" style="width:100%"><button class="bt ok" onclick="prNuevo()">Agregar</button><p class=mut><small>Los nombres de la receta deben ser items existentes de Stock. Para muchos productos a la vez usá Importar Excel.</small></p></div>`},
+  return `${ED?`<div class=cd style="border:2px solid var(--ok)"><b>Receta de ${esc((PR.find(p=>p.id===ED)||{}).nombre||'')}</b> <span class=mut>· lo que descuenta de Stock por cada unidad vendida</span><div id=rec_RE>${recEd('RE')}</div><br><button class="bt ok" onclick="edGuardar()">Guardar receta</button> <button class=bt onclick="ED=null;show('prod')">Cancelar</button></div>`:''}<div class=cd><table><tr><th>Producto</th><th class=n>Precio</th><th>Receta (lo que descuenta)</th><th></th></tr>${PR.map(p=>`<tr class="${p.activo?'':'an'}"><td><b>${esc(p.nombre)}</b>${p.activo?'':' <small>(desactivado)</small>'}</td><td class=n>${gs(p.precio)}</td><td><small class=mut>${esc(recTxt(p))||'—'}</small></td><td class=n><button class="bt s" onclick="prPrecio(${p.id})">Precio</button> <button class="bt s" onclick="prRec(${p.id})">Receta</button> <button class="bt s" onclick="prAct(${p.id},${!p.activo})">${p.activo?'Desactivar':'Activar'}</button></td></tr>`).join('')}</table></div>
+  <h2>Producto nuevo</h2><div class=cd><input id=pn placeholder="Nombre"><input id=pp placeholder="Precio" size=10><p class=mut style="margin:4px 0">Receta (opcional): qué items descuenta cada unidad vendida</p><div id=rec_RN>${recEd('RN')}</div><br><button class="bt ok" onclick="prNuevo()">Agregar</button><p class=mut><small>Los items se eligen de la lista de Stock. Para muchos productos a la vez usá Importar Excel.</small></p></div>`},
 pers:async()=>{
   const[us,cl]=await Promise.all([A('/api/admin/usuarios'),A('/api/clientes')]);
   return `<h2>Usuarios</h2><div class=cd><table><tr><th>Nombre</th><th>Rol</th><th></th></tr>${us.map(u=>`<tr class="${u.activo?'':'an'}"><td>${esc(u.nombre)}</td><td>${u.rol}</td><td class=n><button class="bt s" onclick="usPin(${u.id})">Cambiar PIN</button> <button class="bt s" onclick="usAct(${u.id},${!u.activo})">${u.activo?'Desactivar':'Activar'}</button></td></tr>`).join('')}</table></div>
@@ -119,8 +129,11 @@ pers:async()=>{
   <h2>Clientes</h2><div class=cd><table><tr><th>Nombre</th><th>Teléfono</th><th class=n>Debe</th></tr>${cl.map(c=>`<tr><td>${esc(c.nombre)}</td><td>${esc(c.telefono||'')}</td><td class=n>${gs(c.saldo)}</td></tr>`).join('')}<tr><td colspan=2><b>Total por cobrar</b></td><td class=n><b>${gs(cl.reduce((s,c)=>s+c.saldo,0))}</b></td></tr></table></div>`},
 imp:async()=>`<div class=cd><p>Subí la planilla con las hojas <b>Items</b> y <b>Productos</b>. Si una fila tiene error no se carga nada y te indica cuál corregir. El stock de items que ya existen no se modifica.</p><p><a href="plantilla-carga-cantina.xlsx">Descargar la planilla modelo</a></p><input type=file id=fx accept=".xlsx"><button class="bt ok" onclick="subir()">Subir</button><div id=ri></div></div>`,
 aud:async()=>{
-  const[au,us]=await Promise.all([A('/api/admin/auditoria?limite=150'),A('/api/admin/usuarios')]);const nm=Object.fromEntries(us.map(u=>[u.id,u.nombre]));
-  return `<div class=cd><table><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr>${au.map(r=>`<tr><td>${hh(r.fecha)}</td><td>${esc(nm[r.user_id]||r.user_id||'')}</td><td>${esc(r.accion)}</td><td><small class=mut>${esc(JSON.stringify(r.detalle||{}))}</small></td></tr>`).join('')}</table></div>`}
+  const[au,us]=await Promise.all([A('/api/admin/auditoria?limite=300'),A('/api/admin/usuarios')]);const nm=Object.fromEntries(us.map(u=>[u.id,u.nombre]));
+  const L={venta_anulada:'Venta anulada',pago_anulado:'Cobro anulado',gasto_anulado:'Gasto anulado',turno_abierto:'Turno abierto',turno_cerrado:'Caja cerrada',gasto:'Gasto cargado',usuario_nuevo:'Usuario creado',usuario_editado:'Usuario modificado',producto_nuevo:'Producto creado',producto_editado:'Producto modificado',item_nuevo:'Item creado',stock_entrada:'Entrada de stock',stock_merma:'Merma de stock',importacion_excel:'Importación de Excel',cliente_nuevo:'Cliente creado',pin_cliente:'PIN de cliente'};
+  const dt=d=>Object.entries(d||{}).map(([k,v])=>k.replace(/_/g,' ')+': '+(v&&typeof v==='object'?JSON.stringify(v):v)).join(' · ');
+  const rows=au.filter(r=>!AF||r.accion===AF);
+  return `<div class=bar><select onchange="AF=this.value;show('aud')"><option value="">Todas las acciones</option>${Object.entries(L).map(([k,n])=>`<option value=${k} ${k===AF?'selected':''}>${n}</option>`).join('')}</select><span class=mut>Últimas ${au.length} acciones · la más reciente primero · en rojo: anulaciones y cierres con diferencia</span></div><div class=cd><table><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr>${rows.map(r=>`<tr class="${/anulad/.test(r.accion)||(r.accion==='turno_cerrado'&&r.detalle&&r.detalle.diferencia)?'neg':''}"><td>${hh(r.fecha)}</td><td>${esc(nm[r.user_id]||r.user_id||'')}</td><td><b>${esc(L[r.accion]||r.accion)}</b></td><td><small>${esc(dt(r.detalle))}</small></td></tr>`).join('')||'<tr><td colspan=4>Sin registros</td></tr>'}</table></div>`}
 };
 R();
 </script></body></html>
