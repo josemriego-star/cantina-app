@@ -254,16 +254,25 @@ const ccs=(d,v)=>{cash[d]=Math.max(0,parseInt(String(v).replace(/\D/g,''),10)||0
 const ci=(id,n)=>{cnt[id]=Math.max(0,Math.round(((cnt[id]||0)+n)*1000)/1000);$('#i'+id).value=cnt[id]};
 const cis=(id,v)=>{const x=parseFloat(String(v).replace(',','.'));cnt[id]=isFinite(x)&&x>0?Math.round(x*1000)/1000:0};
 const pasoDe=i=>i.paso||1;
+const cuerpoCierre=()=>({efectivo_contado:tot(),conteo:S.stk.map(i=>({item_id:i.id,contado:cnt[i.id]||0}))});
 async function cerrar(){
-  msg='Cerrando caja…';go('wait');await sync();
+  msg='Calculando cierre…';go('wait');await sync();
   if(S.q.length){msg='Hay operaciones sin enviar. Conectate a internet y probá de nuevo.';backTo='c2';return go('err')}
   try{
-    res=await api(`/api/turnos/${S.turno.id}/cerrar`,{method:'POST',body:JSON.stringify({efectivo_contado:DEN.reduce((s,d)=>s+d*(cash[d]||0),0),conteo:S.stk.map(i=>({item_id:i.id,contado:cnt[i.id]||0}))})});
-    S.turno=null;S.last=null;S.ult=[];save();go('c3');
+    res=await api(`/api/turnos/${S.turno.id}/cerrar`,{method:'POST',body:JSON.stringify({...cuerpoCierre(),solo_calcular:true})});
+    if(res.diferencia!==0||res.items.some(i=>i.diferencia!==0))go('c3');else await confirmarCierre();
+  }catch(e){msg=e.message;backTo='c2';go('err')}
+}
+async function confirmarCierre(){
+  msg='Cerrando caja…';go('wait');
+  try{
+    res=await api(`/api/turnos/${S.turno.id}/cerrar`,{method:'POST',body:JSON.stringify(cuerpoCierre())});
+    S.turno=null;S.last=null;S.ult=[];save();go('c4');
   }catch(e){msg=e.message;backTo='c2';go('err')}
 }
 
 /* ---------- pantallas ---------- */
+const resHTML=()=>`<div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado (efectivo)</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas (efectivo)</td><td>${gs(res.cobros)}</td></tr><tr><td>Gastos de caja</td><td>−${gs(res.gastos||0)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div>${Object.keys(res.otros_medios||{}).length?`<div class=row style="display:block;cursor:default"><small>Cobrado por otros medios (no está en la caja)</small><table>${Object.entries(res.otros_medios).map(([k,v])=>`<tr><td>${MN[k]||k}</td><td>${gs(v)}</td></tr>`).join('')}</table></div>`:''}<div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div>`;
 const W={
 boot:()=>'',
 wait:()=>`<h1>Un momento…</h1><p class=mut>${msg}</p>`,
@@ -286,8 +295,9 @@ debt:()=>`${hd(sel.nombre,'debts')}<p>Debe <b>${gs(sel.saldo)}</b></p><button cl
 gasto:()=>`${hd('Gasto de caja','home')}<p class=mut>Anotá lo que se pagó con plata de la caja.</p><input id=gc placeholder="¿En qué se gastó? (ej: hielo)">${mi('gm',0,'Monto')}<p id=ge class=er></p><button class="b ok" onclick="gastoOk()">Registrar gasto</button>`,
 stock:()=>`${hd('Stock','home')}${S.stk.map(i=>`<div class=row style="cursor:default"><span class=dot style="background:var(${i.stock<=0?'--bad':i.stock<=i.minimo?'--cr':'--ok'})"></span><div>${i.nombre}</div><b>${i.stock}</b></div>`).join('')}`,
 c1:()=>{const t=DEN.reduce((s,d)=>s+d*(cash[d]||0),0);return `${hd('Cerrar caja: efectivo','home')}<p>Contá billetes y monedas.</p>${DEN.map(d=>`<div class=row style="cursor:default"><div>${gs(d)}</div><div class=st><button onclick="cc(${d},-1)">−</button><input class=qi id=q${d} type=text inputmode=numeric value="${cash[d]||0}" onfocus="this.select()" oninput="ccs(${d},this.value)" onblur="this.value=cash[${d}]||0"><button onclick="cc(${d},1)">+</button></div></div>`).join('')}<div class=bar><div><small>Contado</small><strong id=ct>${gs(t)}</strong></div><button class=b onclick="go('c2')">Seguir</button></div>`},
-c2:()=>`${hd('Cerrar caja: mercadería','c1')}<p>Contá lo que queda.</p>${S.stk.map(i=>`<div class=row style="cursor:default"><div>${i.nombre}</div><div class=st><button onclick="ci(${i.id},-${pasoDe(i)})">−</button><input class=qi id=i${i.id} type=text inputmode="${pasoDe(i)%1?'decimal':'numeric'}" value="${cnt[i.id]||0}" onfocus="this.select()" oninput="cis(${i.id},this.value)" onblur="this.value=cnt[${i.id}]||0"><button onclick="ci(${i.id},${pasoDe(i)})">+</button></div></div>`).join('')}<div class=bar><div></div><button class="b bad" onclick="cerrar()">Cerrar y ver resultado</button></div>`,
-c3:()=>`<h1>Resultado del cierre</h1><div class=row style="display:block;cursor:default"><table><tr><td>Fondo inicial</td><td>${gs(res.fondo)}</td></tr><tr><td>Ventas contado (efectivo)</td><td>${gs(res.ventas_contado)}</td></tr><tr><td>Cobros de deudas (efectivo)</td><td>${gs(res.cobros)}</td></tr><tr><td>Gastos de caja</td><td>−${gs(res.gastos||0)}</td></tr><tr><td><b>Debería haber</b></td><td><b>${gs(res.esperado)}</b></td></tr><tr><td>Contaste</td><td>${gs(res.contado)}</td></tr><tr><td><b>Diferencia</b></td><td class="${res.diferencia<0?'neg':'pos'}"><b>${res.diferencia>0?'+':''}${gs(res.diferencia)}</b></td></tr></table></div>${Object.keys(res.otros_medios||{}).length?`<div class=row style="display:block;cursor:default"><small>Cobrado por otros medios (no está en la caja)</small><table>${Object.entries(res.otros_medios).map(([k,v])=>`<tr><td>${MN[k]||k}</td><td>${gs(v)}</td></tr>`).join('')}</table></div>`:''}<div class=row style="display:block;cursor:default"><table><tr><th>Mercadería</th><th>Debe haber</th><th>Contaste</th></tr>${res.items.map(i=>`<tr><td>${i.nombre}</td><td>${i.esperado}</td><td class="${i.diferencia<0?'neg':i.diferencia>0?'pos':''}">${i.contado}</td></tr>`).join('')}</table></div><button class="b ok" onclick="salir()">Terminar</button>`,
+c2:()=>`${hd('Cerrar caja: mercadería','c1')}<p>Contá lo que queda.</p>${S.stk.map(i=>`<div class=row style="cursor:default"><div>${i.nombre}</div><div class=st><button onclick="ci(${i.id},-${pasoDe(i)})">−</button><input class=qi id=i${i.id} type=text inputmode="${pasoDe(i)%1?'decimal':'numeric'}" value="${cnt[i.id]||0}" onfocus="this.select()" oninput="cis(${i.id},this.value)" onblur="this.value=cnt[${i.id}]||0"><button onclick="ci(${i.id},${pasoDe(i)})">+</button></div></div>`).join('')}<div class=bar><div></div><button class="b bad" onclick="cerrar()">Revisar cierre</button></div>`,
+c3:()=>`<h1>Revisá el cierre</h1><p class=er>Hay diferencias. Si contaste mal, corregí antes de terminar.</p>${resHTML()}<button class=b onclick="go('c1')">Corregir efectivo</button><button class=b onclick="go('c2')">Corregir mercadería</button><button class="b bad" onclick="if(confirm('¿Cerrar la caja con estas diferencias?'))confirmarCierre()">Confirmar cierre así</button>`,
+c4:()=>`<h1>Resultado del cierre</h1>${resHTML()}<button class="b ok" onclick="salir()">Terminar</button>`,
 prob:()=>`${hd('Sin registrar','home')}<p class=mut>Estas operaciones no se pudieron registrar. Avisale al administrador.</p>${S.prob.map(p=>`<div class=row style="display:block;cursor:default"><b>${p.tipo==='venta'?'Venta':p.tipo==='pago'?'Cobro':'Gasto'}</b> · ${new Date(p.fecha).toLocaleString('es-PY')}<div class=er>${p.error}</div></div>`).join('')}<button class=b onclick="S.prob=[];save();go('home')">Entendido</button>`
 };
 function R(){
