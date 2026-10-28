@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cantina · Administración</title>
+<style>
+:root{--bg:#F4F1EA;--card:#FDFCF9;--ink:#2C2C2A;--mut:#5F5E5A;--line:#E8E4D9;--ok:#2F8F5B;--okbg:#EAF3DE;--cr:#993C1D;--crbg:#FAECE7;--bad:#C94F4F;--pur:#534AB7;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.4 Inter,-apple-system,'Segoe UI',sans-serif}
+#app{max-width:1100px;margin:0 auto;padding:14px}
+h1{font-size:24px;margin:6px 0 12px}h2{font-size:18px;margin:18px 0 8px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
+nav button,.bt{border:1px solid #D8D3C5;background:var(--card);color:var(--ink);font:600 15px inherit;border-radius:10px;padding:9px 14px;cursor:pointer}
+nav button.on,.bt.p{background:var(--ink);color:#fff;border-color:var(--ink)}.bt.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.bt.r{color:var(--cr);border-color:var(--cr)}.bt.s{padding:5px 10px;font-size:14px}
+.cd{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;overflow-x:auto}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.kp .cd{margin:0}.kp small{display:block;color:var(--mut)}.kp b{font-size:20px}
+table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mut);font-size:13px}.n{text-align:right;white-space:nowrap}
+.an{text-decoration:line-through;color:#999}.neg{color:var(--bad)}.pos{color:#27500A}
+input,select{font:inherit;padding:9px 10px;border:1px solid #D8D3C5;border-radius:10px;background:#fff;margin:0 6px 8px 0;max-width:100%}
+.er{background:var(--crbg);color:#712B13;padding:8px 12px;border-radius:10px}.ok{color:#27500A;background:var(--okbg);padding:8px 12px;border-radius:10px}
+.mut{color:var(--mut)}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.bar h1{margin:0;flex:1}
+</style></head><body><div id="app"></div>
+<script src="config.js"></script>
+<script>
+const K='cantina_admin';let S={};try{S=JSON.parse(localStorage.getItem(K))||{}}catch(e){}
+const sv=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s),fm=n=>String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),gs=n=>fm(n)+' Gs';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const base=()=>String(window.CANTINA_API||S.api||'').replace(/\/$/,'');
+const MN={efectivo:'Efectivo',pos_debito:'POS Débito',pos_credito:'POS Crédito',transferencia:'Transferencia'};
+const hh=x=>x?new Date(x).toLocaleString('es-PY',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+const num=v=>Number(String(v).replace(/\./g,'').replace(',','.'));
+let T='hoy',F='',IT=[],PR=[],US=[],usr=[],sel=null;
+async function A(path,opt={}){
+  const h={...(S.token?{Authorization:'Bearer '+S.token}:{}),...(opt.body&&!(opt.body instanceof FormData)?{'Content-Type':'application/json'}:{})};
+  let r;try{r=await fetch(base()+path,{...opt,headers:h})}catch(e){throw new Error('Sin conexión con el servidor')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){
+    if(r.status===401&&S.token&&path!=='/api/login'){S.token=null;sv();setTimeout(R,0)}
+    const x=d.detail,e=new Error(typeof x==='string'?x:(x&&x.mensaje)||'Error '+r.status);e.det=x;throw e}
+  return d}
+const post=(p,b,m='POST')=>A(p,{method:m,body:JSON.stringify(b)});
+async function run(fn){try{await fn();show(T)}catch(e){alert(e.message)}}
+
+/* ---- acceso ---- */
+async function R(){
+  const a=$('#app');
+  if(!base()){a.innerHTML=`<h1>Primera vez</h1><p class=mut>Dirección de la API:</p><input id=u placeholder="https://cantina-api….onrender.com" style="width:100%"><button class="bt ok" onclick="const v=$('#u').value.trim();if(/^https?:\\/\\//.test(v)){S.api=v;sv();R()}">Guardar</button>`;return}
+  if(!S.token){
+    a.innerHTML='<h1>Administración</h1><p class=mut>Conectando… la primera vez del día puede tardar hasta un minuto.</p>';
+    try{usr=(await A('/api/usuarios/publico')).filter(u=>u.rol==='admin')}catch(e){a.innerHTML=`<h1>Administración</h1><p class=er>${esc(e.message)}</p><button class=bt onclick="R()">Reintentar</button>`;return}
+    a.innerHTML=`<h1>Administración</h1><select id=lu>${usr.map(u=>`<option value=${u.id}>${esc(u.nombre)}</option>`).join('')}</select><input id=lp type=password inputmode=numeric placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()"><button class="bt ok" onclick="entrar()">Entrar</button><p id=le class=er style="display:none"></p>`;return}
+  a.innerHTML=`<div class=bar><h1>Cantina · Administración</h1><button class=bt onclick="S.token=null;sv();R()">Salir</button></div><nav>${[['hoy','Hoy'],['turnos','Turnos'],['stock','Stock'],['prod','Productos'],['pers','Personas'],['imp','Importar Excel'],['aud','Auditoría']].map(([k,n])=>`<button id=t_${k} onclick="show('${k}')">${n}</button>`).join('')}</nav><div id=c></div>`;
+  show(T)}
+async function entrar(){
+  try{const r=await post('/api/login',{usuario_id:+$('#lu').value,pin:$('#lp').value});
+    if(r.usuario.rol!=='admin')throw new Error('Solo administradores');S.token=r.token;sv();R()}
+  catch(e){const x=$('#le');x.style.display='block';x.textContent=e.message}}
+async function show(t){
+  T=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id==='t_'+t));
+  const c=$('#c');if(!c)return;c.innerHTML='<p class=mut>Cargando…</p>';
+  try{c.innerHTML=await V[t]()}catch(e){c.innerHTML=`<p class=er>${esc(e.message)}</p>`}}
+
+/* ---- acciones ---- */
+function an(tipo,id){const m=prompt('Motivo de la anulación (mínimo 3 letras)');if(!m||m.trim().length<3)return;run(()=>post(`/api/${tipo}/${id}/anular`,{motivo:m.trim()}))}
+function ajuste(id,motivo){const q=num(prompt(motivo==='entrada'?'¿Cuánto entró?':'¿Cuánto se perdió (merma)?')||'');if(q>0)run(()=>post('/api/admin/stock/ajuste',{item_id:id,cantidad:q,motivo}))}
+function itemNuevo(){const n=$('#in').value.trim();if(n.length<2)return alert('Falta el nombre');
+  run(()=>post('/api/admin/items',{nombre:n,unidad:$('#iu').value||'unidad',stock:num($('#is').value||0),minimo:num($('#im').value||0),paso:num($('#ip').value||1)}))}
+function parseRec(txt){
+  return txt.split(/[;|]/).map(x=>x.trim()).filter(Boolean).map(p=>{
+    const i=p.lastIndexOf(':'),nom=(i>0?p.slice(0,i):p).trim(),c=i>0?num(p.slice(i+1)):1;
+    const it=IT.find(x=>x.nombre.toLowerCase()===nom.toLowerCase());
+    if(!it)throw new Error(`No existe el item "${nom}"`);if(!(c>0))throw new Error('Cantidad inválida en '+nom);
+    return{item_id:it.id,cantidad:c}})}
+const recTxt=p=>p.receta.map(r=>`${(IT.find(i=>i.id===r.item_id)||{nombre:'?'}).nombre}:${r.cantidad}`).join('; ');
+function prNuevo(){const n=$('#pn').value.trim(),pr=num($('#pp').value||0);if(n.length<2||!(pr>=0))return alert('Falta nombre o precio');
+  run(async()=>post('/api/admin/productos',{nombre:n,precio:pr,receta:parseRec($('#pr').value)}))}
+function prPrecio(id){const p=PR.find(x=>x.id===id),v=prompt('Nuevo precio de '+p.nombre,p.precio);if(v!==null&&num(v)>=0)run(()=>post('/api/admin/productos/'+id,{precio:num(v)},'PATCH'))}
+function prRec(id){const p=PR.find(x=>x.id===id),v=prompt('Receta (Item:cantidad; Item:cantidad)',recTxt(p));if(v!==null)run(async()=>post('/api/admin/productos/'+id,{receta:parseRec(v)},'PATCH'))}
+function prAct(id,a){run(()=>post('/api/admin/productos/'+id,{activo:a},'PATCH'))}
+function usNuevo(){const n=$('#un').value.trim(),p=$('#up').value.trim();if(n.length<2||p.length<4)return alert('Falta nombre o PIN');
+  run(()=>post('/api/admin/usuarios',{nombre:n,pin:p,rol:$('#ur').value}))}
+function usPin(id){const p=prompt('Nuevo PIN (4 a 8 números; administrador 6 a 8)');if(p)run(()=>post('/api/admin/usuarios/'+id,{pin:p},'PATCH'))}
+function usAct(id,a){run(()=>post('/api/admin/usuarios/'+id,{activo:a},'PATCH'))}
+async function subir(){
+  const f=$('#fx').files[0];if(!f)return alert('Elegí el archivo .xlsx');
+  const fd=new FormData();fd.append('archivo',f);$('#ri').innerHTML='<p class=mut>Subiendo…</p>';
+  try{const r=await A('/api/admin/importar',{method:'POST',body:fd});
+    $('#ri').innerHTML='<p class=ok>Listo · '+Object.entries(r).map(([k,v])=>k.replace(/_/g,' ')+': '+v).join(' · ')+'</p>'}
+  catch(e){$('#ri').innerHTML=`<p class=er>${esc(e.message)}</p>`+(e.det&&e.det.errores?'<ul>'+e.det.errores.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')}}
+
+/* ---- pantallas ---- */
+const V={
+hoy:async()=>{
+  const d=await A('/api/admin/movimientos'+(F?'?fecha='+F:''));
+  const rows=[
+    ...d.ventas.map(v=>({k:'ventas',id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', '),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
+    ...d.pagos.map(p=>({k:'pagos',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente,m:p.monto,a:p.anulado})),
+    ...d.gastos.map(g=>({k:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))
+  ].sort((a,b)=>a.f<b.f?-1:1);
+  const hoy=new Date().toLocaleDateString('en-CA');
+  return `<div class=bar><input type=date id=fd value="${F||hoy}" onchange="F=this.value;show('hoy')"><span class=mut>${d.anuladas} anulada(s)</span></div>
+  <div class=kp><div class=cd><small>Ventas contado</small><b>${gs(d.total_contado)}</b></div><div class=cd><small>Ventas a crédito</small><b>${gs(d.total_credito)}</b></div><div class=cd><small>Cobros de deudas</small><b>${gs(d.total_cobros)}</b></div><div class=cd><small>Gastos de caja</small><b>${gs(d.total_gastos)}</b></div></div>
+  <div class=cd><b>Cobrado por medio</b> (contado + cobros)<table>${Object.entries(d.por_medio).map(([k,v])=>`<tr><td>${MN[k]}</td><td class=n>${gs(v)}</td></tr>`).join('')}</table></div>
+  <div class=cd><table><tr><th>Hora</th><th>Quién</th><th>Detalle</th><th class=n>Monto</th><th></th></tr>${rows.map(r=>`<tr class="${r.a?'an':''}"><td>${hh(r.f).slice(-5)}</td><td>${esc(r.e)}</td><td><b>${esc(r.t)}</b><br><small class=mut>${esc(r.x)}${r.a?' · ANULADA'+(r.mo?': '+esc(r.mo):''):''}</small></td><td class=n>${gs(r.m)}</td><td>${r.a?'':`<button class="bt s r" onclick="an('${r.k}',${r.id})">Anular</button>`}</td></tr>`).join('')||'<tr><td colspan=5>Sin movimientos</td></tr>'}</table></div>`},
+turnos:async()=>{
+  const[ts,us]=[await A('/api/admin/turnos'),0];
+  return `<div class=cd><table><tr><th>#</th><th>Empleada</th><th>Abrió</th><th>Cerró</th><th class=n>Fondo</th><th class=n>Esperado</th><th class=n>Contado</th><th class=n>Diferencia</th><th>Mercadería</th></tr>${ts.map(t=>{const df=t.items.filter(i=>i.diferencia!==0).length;return `<tr><td>${t.id}</td><td>${esc(t.empleada)}</td><td>${hh(t.abierto_en)}</td><td>${t.cerrado_en?hh(t.cerrado_en):'<b>ABIERTO</b>'}</td><td class=n>${gs(t.fondo)}</td><td class=n>${t.cerrado_en?gs(t.esperado):'—'}</td><td class=n>${t.cerrado_en?gs(t.contado):'—'}</td><td class="n ${t.diferencia<0?'neg':t.diferencia>0?'pos':''}">${t.cerrado_en?(t.diferencia>0?'+':'')+gs(t.diferencia):'—'}</td><td>${t.cerrado_en?(df?`<span class=neg>${df} con diferencia</span>`:'Sin diferencias'):''}</td></tr>`}).join('')}</table></div>`},
+stock:async()=>{
+  IT=await A('/api/stock');
+  return `<div class=cd><table><tr><th>Item</th><th class=n>Stock</th><th class=n>Mínimo</th><th></th></tr>${IT.map(i=>`<tr><td><span style="color:${i.estado==='rojo'?'var(--bad)':i.estado==='amarillo'?'var(--cr)':'var(--ok)'}">●</span> ${esc(i.nombre)} <small class=mut>(${esc(i.unidad)})</small></td><td class=n><b>${i.stock}</b></td><td class=n>${i.minimo}</td><td class=n><button class="bt s" onclick="ajuste(${i.id},'entrada')">+ Entrada</button> <button class="bt s r" onclick="ajuste(${i.id},'merma')">− Merma</button></td></tr>`).join('')}</table></div>
+  <h2>Item nuevo</h2><div class=cd><input id=in placeholder="Nombre"><input id=iu placeholder="Unidad (unidad, litro, kilo…)"><input id=is placeholder="Stock inicial" size=10><input id=im placeholder="Mínimo" size=8><input id=ip placeholder="Paso botones (1)" size=10><button class="bt ok" onclick="itemNuevo()">Agregar</button></div>`},
+prod:async()=>{
+  [IT,PR]=await Promise.all([A('/api/stock'),A('/api/admin/productos')]);
+  return `<div class=cd><table><tr><th>Producto</th><th class=n>Precio</th><th>Receta (lo que descuenta)</th><th></th></tr>${PR.map(p=>`<tr class="${p.activo?'':'an'}"><td><b>${esc(p.nombre)}</b>${p.activo?'':' <small>(desactivado)</small>'}</td><td class=n>${gs(p.precio)}</td><td><small class=mut>${esc(recTxt(p))||'—'}</small></td><td class=n><button class="bt s" onclick="prPrecio(${p.id})">Precio</button> <button class="bt s" onclick="prRec(${p.id})">Receta</button> <button class="bt s" onclick="prAct(${p.id},${!p.activo})">${p.activo?'Desactivar':'Activar'}</button></td></tr>`).join('')}</table></div>
+  <h2>Producto nuevo</h2><div class=cd><input id=pn placeholder="Nombre"><input id=pp placeholder="Precio" size=10><input id=pr placeholder="Receta: Café (medidas):1; Leche:0,2" style="width:100%"><button class="bt ok" onclick="prNuevo()">Agregar</button><p class=mut><small>Los nombres de la receta deben ser items existentes de Stock. Para muchos productos a la vez usá Importar Excel.</small></p></div>`},
+pers:async()=>{
+  const[us,cl]=await Promise.all([A('/api/admin/usuarios'),A('/api/clientes')]);
+  return `<h2>Usuarios</h2><div class=cd><table><tr><th>Nombre</th><th>Rol</th><th></th></tr>${us.map(u=>`<tr class="${u.activo?'':'an'}"><td>${esc(u.nombre)}</td><td>${u.rol}</td><td class=n><button class="bt s" onclick="usPin(${u.id})">Cambiar PIN</button> <button class="bt s" onclick="usAct(${u.id},${!u.activo})">${u.activo?'Desactivar':'Activar'}</button></td></tr>`).join('')}</table></div>
+  <div class=cd><input id=un placeholder="Nombre"><input id=up type=password inputmode=numeric placeholder="PIN" size=10><select id=ur><option value=empleada>Empleada</option><option value=admin>Administrador</option></select><button class="bt ok" onclick="usNuevo()">Agregar usuario</button></div>
+  <h2>Clientes</h2><div class=cd><table><tr><th>Nombre</th><th>Teléfono</th><th class=n>Debe</th></tr>${cl.map(c=>`<tr><td>${esc(c.nombre)}</td><td>${esc(c.telefono||'')}</td><td class=n>${gs(c.saldo)}</td></tr>`).join('')}<tr><td colspan=2><b>Total por cobrar</b></td><td class=n><b>${gs(cl.reduce((s,c)=>s+c.saldo,0))}</b></td></tr></table></div>`},
+imp:async()=>`<div class=cd><p>Subí la planilla con las hojas <b>Items</b> y <b>Productos</b>. Si una fila tiene error no se carga nada y te indica cuál corregir. El stock de items que ya existen no se modifica.</p><p><a href="plantilla-carga-cantina.xlsx">Descargar la planilla modelo</a></p><input type=file id=fx accept=".xlsx"><button class="bt ok" onclick="subir()">Subir</button><div id=ri></div></div>`,
+aud:async()=>{
+  const[au,us]=await Promise.all([A('/api/admin/auditoria?limite=150'),A('/api/admin/usuarios')]);const nm=Object.fromEntries(us.map(u=>[u.id,u.nombre]));
+  return `<div class=cd><table><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr>${au.map(r=>`<tr><td>${hh(r.fecha)}</td><td>${esc(nm[r.user_id]||r.user_id||'')}</td><td>${esc(r.accion)}</td><td><small class=mut>${esc(JSON.stringify(r.detalle||{}))}</small></td></tr>`).join('')}</table></div>`}
+};
+R();
+</script></body></html>
