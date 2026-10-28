@@ -96,12 +96,13 @@ async function subir(){
   catch(e){$('#ri').innerHTML=`<p class=er>${esc(e.message)}</p>`+(e.det&&e.det.errores?'<ul>'+e.det.errores.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')}}
 
 /* ---- pantallas ---- */
+const posTxt=t=>t.lote_debito==null&&t.lote_credito==null?'—':[['Déb',t.lote_debito,t.pos_debito],['Créd',t.lote_credito,t.pos_credito]].map(([n,l,a])=>`<span class="${(l||0)!==(a||0)?'neg':''}">${n}: ${gs(l||0)} / ${gs(a||0)}</span>`).join('<br>');
 const V={
 hoy:async()=>{
   const d=await A('/api/admin/movimientos'+(F?'?fecha='+F:''));
   const rows=[
-    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', '),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
-    ...d.pagos.map(p=>({k:'pagos',cat:'cobros',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente,m:p.monto,a:p.anulado})),
+    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', ')+(v.comprobante?' · Boleta POS: '+v.comprobante:''),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
+    ...d.pagos.map(p=>({k:'pagos',cat:'cobros',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente+(p.comprobante?' · Boleta POS: '+p.comprobante:''),m:p.monto,a:p.anulado})),
     ...d.gastos.map(g=>({k:'gastos',cat:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))
   ].filter(r=>!FK||r.cat===FK).sort((a,b)=>a.f<b.f?-1:1);
   const hoy=new Date().toLocaleDateString('en-CA');
@@ -113,7 +114,7 @@ hoy:async()=>{
   <div class=cd><table><tr><th>Hora</th><th>Quién</th><th>Detalle</th><th class=n>Monto</th><th></th></tr>${rows.map(r=>`<tr class="${r.a?'an':''}"><td>${hh(r.f).slice(-5)}</td><td>${esc(r.e)}</td><td><b>${esc(r.t)}</b><br><small class=mut>${esc(r.x)}${r.a?' · ANULADA'+(r.mo?': '+esc(r.mo):''):''}</small></td><td class=n>${gs(r.m)}</td><td>${r.a?'':`<button class="bt s r" onclick="an('${r.k}',${r.id})">Anular</button>`}</td></tr>`).join('')||'<tr><td colspan=5>Sin movimientos</td></tr>'}</table></div>`},
 turnos:async()=>{
   const[ts,us]=[await A('/api/admin/turnos'),0];
-  return `<div class=cd><table><tr><th>#</th><th>Empleada</th><th>Abrió</th><th>Cerró</th><th class=n>Fondo</th><th class=n>Esperado</th><th class=n>Contado</th><th class=n>Diferencia</th><th>Mercadería</th></tr>${ts.map(t=>{const df=t.items.filter(i=>i.diferencia!==0).length;return `<tr><td>${t.id}</td><td>${esc(t.empleada)}</td><td>${hh(t.abierto_en)}</td><td>${t.cerrado_en?hh(t.cerrado_en):'<b>ABIERTO</b>'}</td><td class=n>${gs(t.fondo)}</td><td class=n>${t.cerrado_en?gs(t.esperado):'—'}</td><td class=n>${t.cerrado_en?gs(t.contado):'—'}</td><td class="n ${t.diferencia<0?'neg':t.diferencia>0?'pos':''}">${t.cerrado_en?(t.diferencia>0?'+':'')+gs(t.diferencia):'—'}</td><td>${t.cerrado_en?(df?`<span class=neg>${df} con diferencia</span>`:'Sin diferencias'):''}</td></tr>`}).join('')}</table></div>`},
+  return `<div class=cd><table><tr><th>#</th><th>Empleada</th><th>Abrió</th><th>Cerró</th><th class=n>Fondo</th><th class=n>Esperado</th><th class=n>Contado</th><th class=n>Diferencia</th><th>POS (cierre / app)</th><th>Mercadería</th></tr>${ts.map(t=>{const df=t.items.filter(i=>i.diferencia!==0).length;return `<tr><td>${t.id}</td><td>${esc(t.empleada)}</td><td>${hh(t.abierto_en)}</td><td>${t.cerrado_en?hh(t.cerrado_en):'<b>ABIERTO</b>'}</td><td class=n>${gs(t.fondo)}</td><td class=n>${t.cerrado_en?gs(t.esperado):'—'}</td><td class=n>${t.cerrado_en?gs(t.contado):'—'}</td><td class="n ${t.diferencia<0?'neg':t.diferencia>0?'pos':''}">${t.cerrado_en?(t.diferencia>0?'+':'')+gs(t.diferencia):'—'}</td><td>${posTxt(t)}</td><td>${t.cerrado_en?(df?`<span class=neg>${df} con diferencia</span>`:'Sin diferencias'):''}</td></tr>`}).join('')}</table></div>`},
 stock:async()=>{
   IT=await A('/api/stock');
   return `<div class=cd><table><tr><th>Item</th><th class=n>Stock</th><th class=n>Mínimo</th><th></th></tr>${IT.map(i=>`<tr><td><span style="color:${i.estado==='rojo'?'var(--bad)':i.estado==='amarillo'?'var(--cr)':'var(--ok)'}">●</span> ${esc(i.nombre)} <small class=mut>(${esc(i.unidad)})</small></td><td class=n><b>${i.stock}</b></td><td class=n>${i.minimo}</td><td class=n><button class="bt s" onclick="ajuste(${i.id},'entrada')">+ Entrada</button> <button class="bt s r" onclick="ajuste(${i.id},'merma')">− Merma</button></td></tr>`).join('')}</table></div>
