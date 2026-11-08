@@ -1,25 +1,26 @@
 <!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cantina · Administración</title>
+<html lang="es"><head><meta charset="utf-8"><link rel="icon" href="icon-192.png"><meta name="theme-color" content="#1B5E3B"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercator · Administración</title>
 <style>
-:root{--bg:#F4F1EA;--card:#FDFCF9;--ink:#2C2C2A;--mut:#5F5E5A;--line:#E8E4D9;--ok:#2F8F5B;--okbg:#EAF3DE;--cr:#993C1D;--crbg:#FAECE7;--bad:#C94F4F;--pur:#534AB7;color-scheme:light}
+:root{--bg:#F4F9F4;--card:#FFFFFF;--ink:#37474F;--mut:#5F6F76;--line:#DDEBDD;--ok:#1B5E3B;--okbg:#DFF5E1;--cr:#993C1D;--crbg:#FAECE7;--bad:#C94F4F;--pur:#534AB7;color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.4 Inter,-apple-system,'Segoe UI',sans-serif}
 #app{max-width:1100px;margin:0 auto;padding:14px}
 h1{font-size:24px;margin:6px 0 12px}h2{font-size:18px;margin:18px 0 8px}
 nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
-nav button,.bt{border:1px solid #D8D3C5;background:var(--card);color:var(--ink);font:600 15px inherit;border-radius:10px;padding:9px 14px;cursor:pointer}
-nav button.on,.bt.p{background:var(--ink);color:#fff;border-color:var(--ink)}.bt.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.bt.r{color:var(--cr);border-color:var(--cr)}.bt.s{padding:5px 10px;font-size:14px}
+nav button,.bt{border:1px solid #CFE0D0;background:var(--card);color:var(--ink);font:600 15px inherit;border-radius:10px;padding:9px 14px;cursor:pointer}
+nav button.on,.bt.p{background:#1B5E3B;color:#fff;border-color:#1B5E3B}.bt.ok{background:var(--ok);color:#fff;border-color:var(--ok)}.bt.r{color:var(--cr);border-color:var(--cr)}.bt.s{padding:5px 10px;font-size:14px}
 .cd{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px;overflow-x:auto}
 .kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.kp .cd{margin:0}.kp small{display:block;color:var(--mut)}.kp b{font-size:20px}
 table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mut);font-size:13px}.n{text-align:right;white-space:nowrap}
-.an{text-decoration:line-through;color:#999}.neg{color:var(--bad)}.pos{color:#27500A}
+.an{text-decoration:line-through;color:#999}.neg{color:var(--bad)}.pos{color:#1B5E3B}
 input,select{font:inherit;padding:9px 10px;border:1px solid #D8D3C5;border-radius:10px;background:#fff;margin:0 6px 8px 0;max-width:100%}
-.er{background:var(--crbg);color:#712B13;padding:8px 12px;border-radius:10px}.ok{color:#27500A;background:var(--okbg);padding:8px 12px;border-radius:10px}
+.er{background:var(--crbg);color:#712B13;padding:8px 12px;border-radius:10px}.ok{color:#1B5E3B;background:var(--okbg);padding:8px 12px;border-radius:10px}
 .mut{color:var(--mut)}.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.bar h1{margin:0;flex:1}
 .it{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .it .m{flex:1 1 200px;min-width:0}.it .a{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px 12px;margin-top:8px}.kv span{display:block;color:var(--mut);font-size:13px}
+.hdr{display:flex;align-items:center;gap:10px;background:#1B5E3B;color:#fff;border-radius:14px;padding:10px 14px;margin-bottom:12px}.hdr h1{margin:0;flex:1;font-size:20px;color:#fff}.hdr .ic{width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center}.hdr .ic img{width:28px;height:28px}.hdr .bt{background:#DFF5E1;color:#1B5E3B;border-color:#DFF5E1}.brand{display:flex;align-items:center;gap:10px;margin:4px 0 8px}.brand img{width:44px;height:44px}.brand b{font-size:24px;color:#1B5E3B}
 .rr{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.rr select{flex:1 1 150px;min-width:0;margin:0}.rr input{width:80px;margin:0}
 </style></head><body><div id="app"></div>
 <script src="config.js"></script>
@@ -50,10 +51,10 @@ async function R(){
   const a=$('#app');
   if(!base()){a.innerHTML=`<h1>Primera vez</h1><p class=mut>Dirección de la API:</p><input id=u placeholder="https://cantina-api….onrender.com" style="width:100%"><button class="bt ok" onclick="const v=$('#u').value.trim();if(/^https?:\\/\\//.test(v)){S.api=v;sv();R()}">Guardar</button>`;return}
   if(!S.token){
-    a.innerHTML='<h1>Administración</h1><p class=mut>Conectando… la primera vez del día puede tardar hasta un minuto.</p>';
-    try{usr=(await A('/api/usuarios/publico')).filter(u=>u.rol==='admin')}catch(e){a.innerHTML=`<h1>Administración</h1><p class=er>${esc(e.message)}</p><button class=bt onclick="R()">Reintentar</button>`;return}
-    a.innerHTML=`<h1>Administración</h1><select id=lu>${usr.map(u=>`<option value=${u.id}>${esc(u.nombre)}</option>`).join('')}</select><input id=lp type=password inputmode=numeric placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()"><button class="bt ok" onclick="entrar()">Entrar</button><p id=le class=er style="display:none"></p>`;return}
-  a.innerHTML=`<div class=bar><h1>Cantina · Administración</h1><button class=bt onclick="S.token=null;sv();R()">Salir</button></div><nav>${[['hoy','Hoy'],['turnos','Turnos'],['stock','Stock'],['prod','Productos'],['pers','Personas'],['imp','Importar Excel'],['aud','Auditoría']].map(([k,n])=>`<button id=t_${k} onclick="show('${k}')">${n}</button>`).join('')}</nav><div id=c></div>`;
+    a.innerHTML='<div class=brand><img src="icon-192.png" alt=""><b>Mercator</b></div><h1>Administración</h1><p class=mut>Conectando… la primera vez del día puede tardar hasta un minuto.</p>';
+    try{usr=(await A('/api/usuarios/publico')).filter(u=>u.rol==='admin')}catch(e){a.innerHTML=`<div class=brand><img src="icon-192.png" alt=""><b>Mercator</b></div><h1>Administración</h1><p class=er>${esc(e.message)}</p><button class=bt onclick="R()">Reintentar</button>`;return}
+    a.innerHTML=`<div class=brand><img src="icon-192.png" alt=""><b>Mercator</b></div><h1>Administración</h1><select id=lu>${usr.map(u=>`<option value=${u.id}>${esc(u.nombre)}</option>`).join('')}</select><input id=lp type=password inputmode=numeric placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()"><button class="bt ok" onclick="entrar()">Entrar</button><p id=le class=er style="display:none"></p>`;return}
+  a.innerHTML=`<div class=hdr><span class=ic><img src="icon-192.png" alt=""></span><h1>Mercator · Administración</h1><button class=bt onclick="S.token=null;sv();R()">Salir</button></div><nav>${[['hoy','Hoy'],['turnos','Turnos'],['stock','Stock'],['prod','Productos'],['pers','Personas'],['imp','Importar Excel'],['aud','Auditoría']].map(([k,n])=>`<button id=t_${k} onclick="show('${k}')">${n}</button>`).join('')}</nav><div id=c></div>`;
   show(T)}
 async function entrar(){
   try{const r=await post('/api/login',{usuario_id:+$('#lu').value,pin:$('#lp').value});
