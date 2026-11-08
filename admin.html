@@ -35,6 +35,8 @@ const hh=x=>x?new Date(x).toLocaleString('es-PY',{day:'2-digit',month:'2-digit',
 const num=v=>Number(String(v).replace(/\./g,'').replace(',','.'));
 const dec=v=>Number(String(v).trim().replace(',','.'));
 let T='hoy',F='',FK='',AF='',ED=null,REC={RE:[],RN:[]},IT=[],PR=[],US=[],usr=[],sel=null;
+let CB=null,CBO=false,CL=[],CQ='';
+const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 async function A(path,opt={}){
   const h={...(S.token?{Authorization:'Bearer '+S.token}:{}),...(opt.body&&!(opt.body instanceof FormData)?{'Content-Type':'application/json'}:{})};
   let r;try{r=await fetch(base()+path,{...opt,headers:h})}catch(e){throw new Error('Sin conexión con el servidor')}
@@ -89,6 +91,44 @@ function prPrecio(id){const p=PR.find(x=>x.id===id),v=prompt('Nuevo precio de '+
 function prRec(id){const p=PR.find(x=>x.id===id);ED=id;REC.RE=p.receta.map(r=>({item_id:r.item_id,cantidad:String(r.cantidad)}));show('prod').then(()=>window.scrollTo(0,0))}
 function edGuardar(){run(async()=>{await post('/api/admin/productos/'+ED,{receta:recOut('RE')},'PATCH');ED=null})}
 function prAct(id,a){run(()=>post('/api/admin/productos/'+id,{activo:a},'PATCH'))}
+/* combos: fijo (una combinación) o variable (se elige al vender) */
+const cbBase=()=>({id:null,nombre:'',precio:'',variable:false,vars:[{nombre:'',comps:[{producto_id:'',cantidad:'1'},{producto_id:'',cantidad:'1'}]}]});
+function cbNuevo(){CB=cbBase();CBO=true;show('prod').then(()=>window.scrollTo(0,0))}
+function cbEdit(id){const p=PR.find(x=>x.id===id);
+  CB={id,nombre:p.nombre,precio:String(p.precio),variable:p.variable,vars:p.variantes.map(v=>({nombre:v.nombre,comps:v.componentes.map(c=>({producto_id:c.producto_id,cantidad:String(c.cantidad)}))}))};
+  CBO=true;show('prod').then(()=>window.scrollTo(0,0))}
+const cbDraw=()=>{const e=$('#cbx');if(e)e.innerHTML=cbHTML()};
+function cbHTML(){
+  const ops=PR.filter(x=>!x.combo&&x.activo);
+  return `<b>${CB.id?'Editar combo':'Combo nuevo'}</b> <span class=mut>· junta dos o más productos con un precio fijo</span><div style="margin-top8px"></div>
+  <input placeholder="Nombre del combo (ej: Almuerzo)" value="${esc(CB.nombre)}" oninput="CB.nombre=this.value"><input placeholder="Precio" size=10 inputmode=numeric value="${esc(CB.precio)}" oninput="CB.precio=this.value">
+  <p><label><input type=checkbox ${CB.variable?'checked':''} onchange="cbVar(this.checked)" style="width:auto;margin:0 6px 0 0"> <b>Combo variable</b> <span class=mut>(al vender se elige la combinación; el precio es el mismo, el costo cambia)</span></label></p>
+  ${CB.vars.map((v,vi)=>`<div class=cd style="background:#fff"><b>${CB.variable?'Combinación '+(vi+1):'Qué incluye'}</b>${CB.variable?` <input placeholder="Nombre (opcional, si no se arma solo)" value="${esc(v.nombre)}" oninput="CB.vars[${vi}].nombre=this.value" style="width:100%;margin-top:6px">`:''}
+    ${v.comps.map((c,ci)=>`<div class=rr><select onchange="CB.vars[${vi}].comps[${ci}].producto_id=this.value"><option value="">Elegir producto…</option>${ops.map(x=>`<option value=${x.id} ${x.id==c.producto_id?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select><input size=3 inputmode=numeric value="${esc(c.cantidad)}" oninput="CB.vars[${vi}].comps[${ci}].cantidad=this.value"><button class="bt s r" onclick="CB.vars[${vi}].comps.splice(${ci},1);cbDraw()">✕</button></div>`).join('')}
+    <button class="bt s" onclick="CB.vars[${vi}].comps.push({producto_id:'',cantidad:'1'});cbDraw()">+ Producto</button>
+    ${CB.variable&&CB.vars.length>2?`<button class="bt s r" onclick="CB.vars.splice(${vi},1);cbDraw()">Quitar combinación</button>`:''}</div>`).join('')}
+  ${CB.variable?`<button class="bt s" onclick="CB.vars.push({nombre:'',comps:[{producto_id:'',cantidad:'1'},{producto_id:'',cantidad:'1'}]});cbDraw()">+ Otra combinación</button><br><br>`:''}
+  <button class="bt ok" onclick="cbGuardar()">Guardar combo</button> <button class=bt onclick="CBO=false;show('prod')">Cancelar</button>`}
+function cbVar(v){CB.variable=v;if(!v)CB.vars=CB.vars.slice(0,1);else while(CB.vars.length<2)CB.vars.push({nombre:'',comps:[{producto_id:'',cantidad:'1'},{producto_id:'',cantidad:'1'}]});cbDraw()}
+function cbGuardar(){
+  const n=CB.nombre.trim(),pr=num(CB.precio||'');if(n.length<2||!(pr>=0))return alert('Falta el nombre o el precio');
+  let variantes;
+  try{variantes=CB.vars.map(v=>({nombre:CB.variable&&v.nombre.trim()?v.nombre.trim():null,componentes:v.comps.filter(c=>c.producto_id).map(c=>{const q=parseInt(c.cantidad,10);if(!(q>0))throw new Error('Hay una cantidad inválida');return{producto_id:+c.producto_id,cantidad:q}})}))}catch(e){return alert(e.message)}
+  run(async()=>{
+    if(CB.id)await post('/api/admin/productos/'+CB.id,{nombre:n,precio:pr,variable:CB.variable,variantes},'PATCH');
+    else await post('/api/admin/productos',{nombre:n,precio:pr,es_combo:true,variable:CB.variable,variantes});
+    CBO=false})}
+function clEd(id){const c=CL.find(x=>x.id===id),n=prompt('Nombre del cliente',c.nombre);if(n===null)return;
+  const e=prompt('Empresa (vacío = sin empresa)',c.empresa||'');if(e===null)return;
+  run(()=>post('/api/admin/clientes/'+id,{nombre:n.trim()||c.nombre,empresa:e.trim()},'PATCH'))}
+function clNuevo(){const n=$('#cn').value.trim();if(n.length<2)return alert('Falta el nombre');
+  run(()=>post('/api/clientes',{nombre:n,empresa:$('#ce').value.trim()||null,telefono:$('#ct').value.trim()||null}))}
+const clHTML=()=>{const t=norm(CQ).split(/\s+/).filter(Boolean);let g=null;
+  return CL.filter(c=>{const h=norm(c.nombre+' '+(c.empresa||''));return t.every(x=>h.includes(x))})
+    .sort((a,b)=>(!a.empresa-!b.empresa)||norm(a.empresa).localeCompare(norm(b.empresa))||norm(a.nombre).localeCompare(norm(b.nombre)))
+    .map(c=>{const e=c.empresa||'Sin empresa';const h=e!==g?(g=e,`<h2 style="font-size:15px;color:var(--mut)">${esc(e)}</h2>`):'';
+      return h+`<div class=it><div class=m><b>${esc(c.nombre)}</b><br><small class=mut>${esc(c.telefono||'Sin teléfono')}</small></div><div class=a><b>${gs(c.saldo)}</b><button class="bt s" onclick="clEd(${c.id})">Editar</button></div></div>`}).join('')||'<p class=mut>Sin resultados</p>'};
+const clDraw=()=>{const e=$('#adl');if(e)e.innerHTML=clHTML()};
 function usNuevo(){const n=$('#un').value.trim(),p=$('#up').value.trim();if(n.length<2||p.length<4)return alert('Falta nombre o PIN');
   run(()=>post('/api/admin/usuarios',{nombre:n,pin:p,rol:$('#ur').value}))}
 function usPin(id){const p=prompt('Nuevo PIN (4 a 8 números; administrador 6 a 8)');if(p)run(()=>post('/api/admin/usuarios/'+id,{pin:p},'PATCH'))}
@@ -106,12 +146,13 @@ const V={
 hoy:async()=>{
   const d=await A('/api/admin/movimientos'+(F?'?fecha='+F:''));
   const rows=[
-    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre).join(', ')+(v.comprobante?' · Boleta POS: '+v.comprobante:''),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
+    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre+(l.variante?' ('+l.variante+')':'')).join(', ')+(v.comprobante?' · Boleta POS: '+v.comprobante:''),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
     ...d.pagos.map(p=>({k:'pagos',cat:'cobros',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente+(p.comprobante?' · Boleta POS: '+p.comprobante:''),m:p.monto,a:p.anulado})),
+    ...d.compras.map(c=>({k:'compras',cat:'compras',id:c.id,f:c.creado_en,e:c.empleada,t:'Compra · '+c.proveedor,x:'Factura '+c.factura+' · '+c.lineas.map(l=>l.cantidad+' '+l.unidad+' '+l.nombre).join(', ')+(c.de_caja?' · pagada de caja':' · no sale de caja'),m:-c.monto,a:c.anulado})),
     ...d.gastos.map(g=>({k:'gastos',cat:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))
   ].filter(r=>!FK||r.cat===FK).sort((a,b)=>a.f<b.f?-1:1);
   const hoy=new Date().toLocaleDateString('en-CA');
-  const KP=[['contado','Ventas contado',d.total_contado],['credito','Ventas a crédito',d.total_credito],['cobros','Cobros de deudas',d.total_cobros],['gastos','Gastos de caja',d.total_gastos]];
+  const KP=[['contado','Ventas contado',d.total_contado],['credito','Ventas a crédito',d.total_credito],['cobros','Cobros de deudas',d.total_cobros],['gastos','Gastos de caja',d.total_gastos],['compras','Compras de mercadería',d.total_compras]];
   return `<div class=bar><input type=date id=fd value="${F||hoy}" onchange="F=this.value;show('hoy')"><span class=mut>${d.anuladas} anulada(s)</span></div>
   <div class=kp>${KP.map(([k,n,v])=>`<div class=cd onclick="FK=FK==='${k}'?'':'${k}';show('hoy')" style="cursor:pointer;${FK===k?'border:2px solid var(--ok);background:var(--okbg)':''}"><small>${n}</small><b>${gs(v)}</b></div>`).join('')}</div>
   ${FK?`<p class=mut>Mostrando solo: <b>${KP.find(x=>x[0]===FK)[1]}</b> · tocá la tarjeta otra vez para ver todo</p>`:'<p class=mut><small>Tocá una tarjeta para filtrar el detalle.</small></p>'}
@@ -126,15 +167,15 @@ stock:async()=>{
   return IT.map(i=>`<div class=it><div class=m><span style="color:${i.estado==='rojo'?'var(--bad)':i.estado==='amarillo'?'var(--cr)':'var(--ok)'}">●</span> <b>${esc(i.nombre)}</b> <small class=mut>(${esc(i.unidad)})</small><br><small>Stock <b>${i.stock}</b> · Mínimo ${i.minimo}</small></div><div class=a><button class="bt s" onclick="ajuste(${i.id},'entrada')">+ Entrada</button><button class="bt s r" onclick="ajuste(${i.id},'merma')">− Merma</button></div></div>`).join('')+`<h2>Item nuevo</h2><div class=cd><input id=in placeholder="Nombre"><input id=iu placeholder="Unidad (unidad, litro, kilo…)"><input id=is placeholder="Stock inicial" size=10><input id=im placeholder="Mínimo" size=8><input id=ip placeholder="Paso botones (1)" size=10><button class="bt ok" onclick="itemNuevo()">Agregar</button></div>`},
 prod:async()=>{
   [IT,PR]=await Promise.all([A('/api/stock'),A('/api/admin/productos')]);
-  return `${ED?`<div class=cd style="border:2px solid var(--ok)"><b>Receta de ${esc((PR.find(p=>p.id===ED)||{}).nombre||'')}</b> <span class=mut>· lo que descuenta de Stock por cada unidad vendida</span><div id=rec_RE style="margin-top:8px">${recEd('RE')}</div><br><button class="bt ok" onclick="edGuardar()">Guardar receta</button> <button class=bt onclick="ED=null;show('prod')">Cancelar</button></div>`:''}${PR.map(p=>`<div class="it ${p.activo?'':'an'}"><div class=m><b>${esc(p.nombre)}</b>${p.activo?'':' <small>(desactivado)</small>'} · ${gs(p.precio)}<br><small class=mut>${esc(recTxt(p))||'Sin receta'}</small></div><div class=a><button class="bt s" onclick="prPrecio(${p.id})">Precio</button><button class="bt s" onclick="prRec(${p.id})">Receta</button><button class="bt s" onclick="prAct(${p.id},${!p.activo})">${p.activo?'Desactivar':'Activar'}</button></div></div>`).join('')}<h2>Producto nuevo</h2><div class=cd><input id=pn placeholder="Nombre"><input id=pp placeholder="Precio" size=10><p class=mut style="margin:4px 0">Receta (opcional): qué items descuenta cada unidad vendida</p><div id=rec_RN>${recEd('RN')}</div><br><button class="bt ok" onclick="prNuevo()">Agregar</button><p class=mut><small>Los items se eligen de la lista de Stock. Para muchos productos a la vez usá Importar Excel.</small></p></div>`},
+  return `${CBO?`<div class=cd id=cbx style="border:2px solid var(--ok)">${cbHTML()}</div>`:''}${ED?`<div class=cd style="border:2px solid var(--ok)"><b>Receta de ${esc((PR.find(p=>p.id===ED)||{}).nombre||'')}</b> <span class=mut>· lo que descuenta de Stock por cada unidad vendida</span><div id=rec_RE style="margin-top:8px">${recEd('RE')}</div><br><button class="bt ok" onclick="edGuardar()">Guardar receta</button> <button class=bt onclick="ED=null;show('prod')">Cancelar</button></div>`:''}${PR.map(p=>`<div class="it ${p.activo?'':'an'}"><div class=m><b>${esc(p.nombre)}</b>${p.activo?'':' <small>(desactivado)</small>'} · ${gs(p.precio)}<br><small class=mut>${p.combo?(p.variable?'Combo variable: ':'Combo: ')+esc(p.variantes.map(v=>v.nombre).join('  /  ')):esc(recTxt(p))||'Sin receta'}</small></div><div class=a><button class="bt s" onclick="prPrecio(${p.id})">Precio</button>${p.combo?`<button class="bt s" onclick="cbEdit(${p.id})">Editar combo</button>`:`<button class="bt s" onclick="prRec(${p.id})">Receta</button>`}<button class="bt s" onclick="prAct(${p.id},${!p.activo})">${p.activo?'Desactivar':'Activar'}</button></div></div>`).join('')}<h2>Combo</h2><div class=cd><p class=mut style="margin-top:0">Junta dos o más productos en uno, con precio fijo. Puede ser fijo (ej: Almuerzo económico = guiso + jugo) o variable (ej: Almuerzo con varias combinaciones). Primero cargá los productos sueltos.</p><button class="bt ok" onclick="cbNuevo()">+ Combo nuevo</button></div><h2>Producto nuevo</h2><div class=cd><input id=pn placeholder="Nombre"><input id=pp placeholder="Precio" size=10><p class=mut style="margin:4px 0">Receta (opcional): qué items descuenta cada unidad vendida</p><div id=rec_RN>${recEd('RN')}</div><br><button class="bt ok" onclick="prNuevo()">Agregar</button><p class=mut><small>Los items se eligen de la lista de Stock. Para muchos productos a la vez usá Importar Excel.</small></p></div>`},
 pers:async()=>{
-  const[us,cl]=await Promise.all([A('/api/admin/usuarios'),A('/api/clientes')]);
+  const[us,cl]=await Promise.all([A('/api/admin/usuarios'),A('/api/clientes')]);CL=cl;CQ='';
   return `<h2>Usuarios</h2>${us.map(u=>`<div class="it ${u.activo?'':'an'}"><div class=m><b>${esc(u.nombre)}</b> <span class=mut>· ${u.rol}${u.activo?'':' · desactivado'}</span></div><div class=a><button class="bt s" onclick="usPin(${u.id})">Cambiar PIN</button><button class="bt s" onclick="usAct(${u.id},${!u.activo})">${u.activo?'Desactivar':'Activar'}</button></div></div>`).join('')}<div class=cd><input id=un placeholder="Nombre"><input id=up type=password inputmode=numeric placeholder="PIN" size=10><select id=ur><option value=empleada>Empleada</option><option value=admin>Administrador</option></select><button class="bt ok" onclick="usNuevo()">Agregar usuario</button></div>
-  <h2>Clientes</h2>${cl.map(c=>`<div class=it><div class=m><b>${esc(c.nombre)}</b><br><small class=mut>${esc(c.telefono||'Sin teléfono')}</small></div><div class=a><b>${gs(c.saldo)}</b></div></div>`).join('')}<div class=it><div class=m><b>Total por cobrar</b></div><div class=a><b>${gs(cl.reduce((t,c)=>t+c.saldo,0))}</b></div></div>`},
+  <h2>Clientes</h2><div class=cd><input id=cn placeholder="Nombre"><input id=ce placeholder="Empresa (opcional)"><input id=ct placeholder="Teléfono (opcional)"><button class="bt ok" onclick="clNuevo()">Agregar cliente</button></div><input type=search placeholder="Buscar cliente o empresa" oninput="CQ=this.value;clDraw()" style="width:100%"><div id=adl>${clHTML()}</div><div class=it><div class=m><b>Total por cobrar</b></div><div class=a><b>${gs(cl.reduce((t,c)=>t+c.saldo,0))}</b></div></div>`},
 imp:async()=>`<div class=cd><p>Subí la planilla con las hojas <b>Items</b> y <b>Productos</b>. Si una fila tiene error no se carga nada y te indica cuál corregir. El stock de items que ya existen no se modifica.</p><p><a href="plantilla-carga-cantina.xlsx">Descargar la planilla modelo</a></p><input type=file id=fx accept=".xlsx"><button class="bt ok" onclick="subir()">Subir</button><div id=ri></div></div>`,
 aud:async()=>{
   const[au,us]=await Promise.all([A('/api/admin/auditoria?limite=300'),A('/api/admin/usuarios')]);const nm=Object.fromEntries(us.map(u=>[u.id,u.nombre]));
-  const L={venta_anulada:'Venta anulada',pago_anulado:'Cobro anulado',gasto_anulado:'Gasto anulado',turno_abierto:'Turno abierto',turno_cerrado:'Caja cerrada',gasto:'Gasto cargado',usuario_nuevo:'Usuario creado',usuario_editado:'Usuario modificado',producto_nuevo:'Producto creado',producto_editado:'Producto modificado',item_nuevo:'Item creado',stock_entrada:'Entrada de stock',stock_merma:'Merma de stock',importacion_excel:'Importación de Excel',cliente_nuevo:'Cliente creado',pin_cliente:'PIN de cliente'};
+  const L={venta_anulada:'Venta anulada',pago_anulado:'Cobro anulado',gasto_anulado:'Gasto anulado',turno_abierto:'Turno abierto',turno_cerrado:'Caja cerrada',gasto:'Gasto cargado',usuario_nuevo:'Usuario creado',usuario_editado:'Usuario modificado',producto_nuevo:'Producto creado',producto_editado:'Producto modificado',item_nuevo:'Item creado',stock_entrada:'Entrada de stock',stock_merma:'Merma de stock',importacion_excel:'Importación de Excel',cliente_nuevo:'Cliente creado',cliente_editado:'Cliente modificado',compra:'Compra de mercadería',compra_anulada:'Compra anulada',pin_cliente:'PIN de cliente'};
   const MK=new Set(['monto','fondo','diferencia','total','precio']);
   const val=(k,v)=>k==='pos'?['debito','credito'].filter(x=>v[x]).map(x=>`${x==='debito'?'Débito':'Crédito'}: app ${gs(v[x].app)} · POS ${gs(v[x].lote)} · dif. ${gs(v[x].diferencia)}`).join(' | '):MK.has(k)&&typeof v==='number'?gs(v):v&&typeof v==='object'?JSON.stringify(v):v;
   const dt=d=>Object.entries(d||{}).filter(([k,v])=>v!==null&&v!==undefined).map(([k,v])=>k.replace(/_/g,' ')+': '+val(k,v)).join(' · ');
