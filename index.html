@@ -46,9 +46,13 @@ table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:8px 4px;t
 .pos{color:var(--okink)}.neg{color:var(--bad)}
 .qi{width:84px;min-height:50px;margin:0;padding:0 4px;text-align:center;font-weight:700;font-size:21px}
 .mi{position:relative}.mi span{position:absolute;right:16px;top:14px;font-size:18px;color:var(--soft)}.mi input{padding-right:56px}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 12px;padding:0 16px 2px;-webkit-overflow-scrolling:touch}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:42px;padding:0 18px;border-radius:21px;border:1px solid var(--line);background:#fff;color:var(--ink);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
 @media(min-width:700px){html,body{background:#E4EDE4}#app{background:var(--bg);min-height:100vh;box-shadow:0 0 0 1px #D5E3D5,0 12px 40px rgba(27,94,59,.10)}#est{background:#E4EDE4}.est{border-radius:0 0 14px 14px}.bar{box-shadow:0 -1px 0 var(--line)}}
 </style></head><body><div id="est"></div><div id="app"></div>
 <script src="config.js"></script>
+<script src="imprimir.js"></script>
 <script>
 const DEN=[100000,50000,20000,10000,5000,2000,1000,500,100];
 let S={};try{S=JSON.parse(localStorage.getItem('cantina2'))||{}}catch(e){}
@@ -61,8 +65,9 @@ const mi=(id,v,ph)=>`<div class=mi><input id=${id} type=tel inputmode=numeric pl
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const uid=()=>(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,12));
+const CFG=()=>S.cfg||{modo:'pantalla',ancho_mm:58,auto_imprimir:true,comanda:{},ticket:{}};
 const base=()=>String(window.CANTINA_API||S.api||'').replace(/\/$/,'');
-let V='boot',cart={},sel=null,cash={},cnt={},lote={},pin='',err='',msg='',cb=null,res=null,usr=[],pend=null,offConf=false,ptitle='',pback='users',psign=false,backTo='home',syncing=false,comp=null,pin1='',vsel=null,vch={},pq='',cq='',bq='',cp={prov:'',provId:null,fac:'',monto:0,caja:'',lin:{}};
+let cf='',prt=null,V='boot',cart={},sel=null,cash={},cnt={},lote={},pin='',err='',msg='',cb=null,res=null,usr=[],pend=null,offConf=false,ptitle='',pback='users',psign=false,backTo='home',syncing=false,comp=null,pin1='',vsel=null,vch={},pq='',cq='',bq='',cp={prov:'',provId:null,fac:'',monto:0,caja:'',lin:{}};
 
 async function api(path,opt={},ms=70000){
   const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
@@ -75,6 +80,11 @@ async function api(path,opt={},ms=70000){
 }
 const go=v=>{V=v;R()};
 const hd=(t,b)=>`<div class="top${b?' hb':''}">${b?`<button class=back aria-label="Volver" onclick="go('${b}')">←</button>`:''}<h1>${t}</h1></div>`;
+const CATS=['Minutas','Bebidas','Cafés','Comidas'];
+const catOk=p=>!cf||(cf==='_'?!p.categoria:p.categoria===cf);
+const chips=()=>{const hay=CATS.filter(c=>S.cat.some(p=>p.categoria===c));if(!hay.length)return '';
+  const l=[['','Todos'],...hay.map(c=>[c,c])];if(S.cat.some(p=>!p.categoria))l.push(['_','Otros']);
+  return `<div class=chips>${l.map(([k,n])=>`<button class="chip ${cf===k?'on':''}" onclick="cf='${k}';R()">${n}</button>`).join('')}</div>`};
 const kp=k=>{const[a,b]=String(k).split('|');return{pid:+a,sig:b||''}};
 const sigE=sg=>sg?sg.split('.').map(x=>{const[a,b]=x.split('-');return{parte_id:+a,producto_id:+b}}):[];
 const cartT=()=>Object.entries(cart).reduce((s,[k,q])=>s+q*S.cat.find(p=>p.id==kp(k).pid).precio,0);
@@ -115,6 +125,7 @@ async function sync(){
 async function refrescar(){
   try{
     S.turno=await api('/api/turnos/actual');
+    try{S.cfg=await api('/api/config')}catch(e){if(e.status===401)throw e}
     if(!S.q.length){const[c,s,cl,pv]=await Promise.all([api('/api/catalogo'),api('/api/stock'),api('/api/clientes'),api('/api/proveedores')]);S.cat=c;S.stk=s;S.cli=cl;S.prv=pv}
     save();return true;
   }catch(e){if(e.status===401&&!S.q.length)S.exp=true;return false}
@@ -169,8 +180,9 @@ function vender(t){cq='';
 }
 async function elegirCliente(id){sel=S.cli.find(c=>c.id===id);pend.body.cliente_id=id;await irConf()}
 async function nuevoCliente(){
-  const n=$('#nc').value.trim(),tel=$('#np').value.trim(),emp=$('#ne').value.trim();if(n.length<2)return;
-  try{const r=await api('/api/clientes',{method:'POST',body:JSON.stringify({nombre:n,telefono:tel||null,empresa:emp||null})});S.cli.push({id:r.id,nombre:n,telefono:tel,empresa:emp||null,saldo:0,tiene_pin:false});save();await elegirCliente(r.id)}
+  const n=$('#nc').value.trim(),tel=$('#np').value.trim(),emp=$('#ne').value.trim(),ced=$('#ni').value.trim(),er=$('#nce');if(n.length<2){er.textContent='Escribí nombre y apellido';return}
+  if(!tel){er.textContent='Falta el celular del cliente';return}
+  try{const r=await api('/api/clientes',{method:'POST',body:JSON.stringify({nombre:n,cedula:ced||null,telefono:tel,empresa:emp||null})});S.cli.push({id:r.id,nombre:n,cedula:ced||n,telefono:tel,empresa:emp||null,saldo:0,tiene_pin:false});save();await elegirCliente(r.id)}
   catch(e){msg=e.net?'Para agregar un cliente nuevo hace falta conexión':e.message;backTo='client';go('err')}
 }
 async function irConf(){
@@ -198,11 +210,23 @@ function fin(op,r){
   const b=op.body,t=op.tipo==='venta'?b.lineas.reduce((s,l)=>s+l.cantidad*S.cat.find(p=>p.id==l.producto_id).precio,0):b.monto;
   if(op.tipo==='venta'){S.last={uuid:b.client_uuid,tipo:'venta',fx:{lineas:b.lineas,tipo:b.tipo,cliente_id:b.cliente_id}};if(r){S.ult.push({uuid:b.client_uuid,id:r.id});S.ult=S.ult.slice(-20)}}
   else S.last=null;
+  prt=null;
+  if(op.tipo==='venta'&&CFG().modo==='impreso'){
+    const c=b.cliente_id?S.cli.find(x=>x.id===b.cliente_id):null;
+    prt={id:r?r.id:'L-'+b.client_uuid.slice(0,4).toUpperCase(),fecha:Date.now(),empleada:S.user.nombre,cliente:c?c.nombre:'',tipo:b.tipo,medio:b.medio||'efectivo',comprobante:b.comprobante||'',total:t,
+      lineas:b.lineas.map(l=>{const p=S.cat.find(x=>x.id==l.producto_id);return{cant:l.cantidad,nombre:p.nombre,precio:p.precio,cat:p.categoria||'',det:p.combo?compTxt(p,l.elecciones):''}})};
+  }
   msg=`${gs(t)} ${op.tipo==='pago'?'cobrado':b.tipo==='contado'?'al contado':'a crédito'}${b.medio&&b.medio!=='efectivo'?' · '+MN[b.medio]:''}${r?'':' · se enviará al volver internet'}`;
   comp=b.cliente_id?{tipo:op.tipo,cid:b.cliente_id,t,conf:b.cliente_pin?'PIN':'firma',fecha:Date.now(),
     lin:op.tipo==='venta'?b.lineas.map(l=>{const p=S.cat.find(x=>x.id==l.producto_id),ct=p.combo?compTxt(p,l.elecciones):'';return `${l.cantidad} × ${p.nombre} × ${fm(p.precio)}`+(ct?`\n     ↳ ${ct}`:'')}):[]}:null;
-  cart={};save();go('ok');if(!comp)setTimeout(()=>{if(V==='ok')go('home')},1400);
+  cart={};save();go('ok');if(!comp&&!prt)setTimeout(()=>{if(V==='ok')go('home')},1400);
+  if(prt&&CFG().auto_imprimir)imprimirVenta();
   if(r)refrescar().then(est);else sync();
+}
+function imprimirVenta(q){
+  if(!prt)return;const c=CFG();
+  const p=q==='comanda'?[PRT.comanda(c,prt)]:q==='ticket'?[PRT.ticket(c,prt)]:PRT.venta(c,prt);
+  if(!PRT.imprimir(p,c.ancho_mm||58))alert('No hay nada para imprimir: ninguna línea de esta venta va a cocina')
 }
 async function undo(){
   const L=S.last;if(!L)return;
@@ -240,14 +264,14 @@ function enviarWA(){
 /* buscador de clientes: filtra mientras se escribe, sin redibujar la pantalla (no pierde el foco) */
 const cliHTML=(lista,fn)=>{
   const t=norm(cq).split(/\s+/).filter(Boolean);
-  const l=lista.filter(c=>{const h=norm(c.nombre+' '+(c.empresa||''));return t.every(x=>h.includes(x))})
+  const l=lista.filter(c=>{const h=norm(c.nombre+' '+(c.empresa||'')+' '+(c.cedula||''));return t.every(x=>h.includes(x))})
     .sort((a,b)=>(!a.empresa-!b.empresa)||norm(a.empresa).localeCompare(norm(b.empresa))||norm(a.nombre).localeCompare(norm(b.nombre)));
   let g=null;
   return l.map(c=>{const e=c.empresa||'Sin empresa';const h=e!==g?(g=e,`<div class=sec style="font-size:15px;margin:12px 0 6px;color:var(--mut)">${esc(e)}</div>`):'';
     return h+`<div class=row onclick="${fn}(${c.id})"><div>${esc(c.nombre)}</div><small>debe ${gs(c.saldo)}</small></div>`}).join('')||'<p class=mut>No hay clientes con ese nombre</p>';
 };
 const cliDraw=()=>{const e=$('#cl');if(e)e.innerHTML=V==='debts'?cliHTML(S.cli.filter(c=>c.saldo>0),'elegirDeuda'):cliHTML(S.cli,'elegirCliente')};
-const buscador=()=>`<input id=cs type=search autocomplete=off placeholder="🔍 Buscar cliente o empresa" value="${esc(cq)}" oninput="cq=this.value;cliDraw()">`;
+const buscador=()=>`<input id=cs type=search autocomplete=off placeholder="🔍 Buscar cliente, empresa o cédula" value="${esc(cq)}" oninput="cq=this.value;cliDraw()">`;
 function elegirDeuda(id){sel=S.cli.find(x=>x.id===id);go('debt')}
 
 /* compra de mercadería o insumos: la empleada carga proveedor, factura, total y cantidades (sin costos por item) */
@@ -359,17 +383,17 @@ users:()=>`${banner()}<h1>¿Quién atiende?</h1>${usr.map((u,i)=>`<button class=
 pin:()=>`${hd(ptitle,pback)}${err?`<p class=er>${err}</p>`:''}<div class=dots>${'●'.repeat(pin.length)||'&nbsp;'}</div><div class=kp>${[1,2,3,4,5,6,7,8,9,'⌫',0,'✓'].map(k=>`<button onclick="key('${k}')">${k}</button>`).join('')}</div>${psign?`<button class="b ghost" onclick="go('firma')">Prefiere firmar</button>`:''}`,
 fondo:()=>`<h1>Empezar turno</h1><p>${S.user.nombre}, ¿con cuánto efectivo empezás?</p>${mi('f',100000)}<button class="b ok" onclick="abrirTurno()">Empezar turno</button><button class="b ghost" onclick="salir()">Cambiar de usuario</button>`,
 otro:()=>`<h1>Turno abierto</h1><p>Hay un turno abierto de <b>${S.turno.empleada}</b>. Tiene que cerrar su caja antes de que vos empieces.</p><button class=b onclick="salir()">Volver</button>`,
-home:()=>`<div class=hero><img class=logo src="icon-claro.png" alt=""><h1>Mer<em>cator</em></h1></div><div class=hola>Hola, ${S.user.nombre}</div><div class=sec style="margin-top:6px">Acciones rápidas</div><div class=qa><button class="qt n" onclick="cart={};go('sell')">${IC.cart}Vender</button><button class="qt y" onclick="cq='';go('debts')">${IC.cash}Cobrar deuda</button><button class="qt s" onclick="cpReset();go('compra')">${IC.box}Compra de mercadería</button><button class="qt s" onclick="go('gasto')">${IC.rec}Cargar gasto</button><button class="qt w" onclick="go('stock')">${IC.box}Stock</button></div><button class="b og" onclick="cash={};cnt={};lote={};go('c1')">Cerrar caja</button>${S.last?`<button class="b ghost" onclick="undo()">Deshacer última venta</button>`:''}`,
-sell:()=>`${hd('Vender','home')}<div class=grid>${S.cat.map(p=>{const vb=p.combo&&p.variable,q=vb?Object.entries(cart).filter(([k])=>kp(k).pid===p.id).reduce((s,[,n])=>s+n,0):(cart[p.id]||0);return `<div class="tile ${q?'on':''}" onclick="${vb?`vsel=${p.id};vch={};go('vari')`:`add(${p.id},1)`}"><b>${p.nombre}</b><span>${gs(p.precio)}${p.combo?' · combo':''}</span>${q?`<i class=q>${q}</i>${vb?'':`<button class=m onclick="event.stopPropagation();add(${p.id},-1)">−</button>`}`:''}</div>`}).join('')}</div><div class=bar><div><small>Total</small><strong>${gs(cartT())}</strong></div><button class=b ${cartT()?'':'disabled'} onclick="go('how')">Cobrar</button></div>`,
+home:()=>`<div class=hero><img class=logo src="icon-claro.png" alt=""><h1>Mer<em>cator</em></h1></div><div class=hola>Hola, ${S.user.nombre}</div><div class=sec style="margin-top:6px">Acciones rápidas</div><div class=qa><button class="qt n" onclick="cart={};cf='';go('sell')">${IC.cart}Vender</button><button class="qt y" onclick="cq='';go('debts')">${IC.cash}Cobrar deuda</button><button class="qt s" onclick="cpReset();go('compra')">${IC.box}Compra de mercadería</button><button class="qt s" onclick="go('gasto')">${IC.rec}Cargar gasto</button><button class="qt w" onclick="go('stock')">${IC.box}Stock</button></div><button class="b og" onclick="cash={};cnt={};lote={};go('c1')">Cerrar caja</button>${S.last?`<button class="b ghost" onclick="undo()">Deshacer última venta</button>`:''}`,
+sell:()=>`${hd('Vender','home')}${chips()}<div class=grid>${S.cat.filter(catOk).map(p=>{const vb=p.combo&&p.variable,q=vb?Object.entries(cart).filter(([k])=>kp(k).pid===p.id).reduce((s,[,n])=>s+n,0):(cart[p.id]||0);return `<div class="tile ${q?'on':''}" onclick="${vb?`vsel=${p.id};vch={};go('vari')`:`add(${p.id},1)`}"><b>${p.nombre}</b><span>${gs(p.precio)}${p.combo?' · combo':''}</span>${q?`<i class=q>${q}</i>${vb?'':`<button class=m onclick="event.stopPropagation();add(${p.id},-1)">−</button>`}`:''}</div>`}).join('')}</div><div class=bar><div><small>Total</small><strong>${gs(cartT())}</strong></div><button class=b ${cartT()?'':'disabled'} onclick="go('how')">Cobrar</button></div>`,
 vari:()=>{const p=S.cat.find(x=>x.id===vsel),ps=(p.partes||[]).filter(pt=>pt.opciones.length>1),fijas=(p.partes||[]).filter(pt=>pt.opciones.length===1).map(pt=>(pt.cantidad>1?pt.cantidad+'× ':'')+pt.opciones[0].nombre).join(' + '),listo=ps.every(pt=>vch[pt.id]),ag=Object.entries(cart).filter(([k,q])=>kp(k).pid===p.id&&q>0);
   return `${hd(esc(p.nombre),'sell')}<p class=mut>${gs(p.precio)} por combo${fijas?' · incluye siempre: '+esc(fijas):''}</p>${ps.map(pt=>`<div class=sec style="font-size:17px;margin:10px 0 6px">${esc(pt.nombre||'Elegí una opción')}${pt.cantidad>1?' (×'+pt.cantidad+')':''}</div><div class=grid>${pt.opciones.map(o=>`<div class="tile ${vch[pt.id]===o.producto_id?'on':''}" style="min-height:64px" onclick="vch[${pt.id}]=${o.producto_id};R()"><b>${esc(o.nombre)}</b></div>`).join('')}</div>`).join('')}<button class="b ok" style="margin-top:14px" ${listo?'':'disabled'} onclick="vAdd()">Agregar al pedido</button>${ag.length?`<div class=sec style="font-size:17px">En el pedido</div>`+ag.map(([k,q])=>`<div class=row style="cursor:default"><div>${esc(compTxt(p,sigE(kp(k).sig)))}</div><div class=st><button onclick="add('${k}',-1)">−</button><b>${q}</b><button onclick="add('${k}',1)">+</button></div></div>`).join(''):''}<button class=b onclick="go('sell')">Listo</button>`},
 compra:()=>`${hd('Compra de mercadería','home')}<p class=mut>Cargá lo que compraste con los datos de la factura. Los costos por item los completa el administrador. Los gastos que no son mercadería van en "Cargar gasto".</p><p id=cpe class=er></p><div id=pvx>${pvHTML()}</div><input id=cpf placeholder="Nº de factura" value="${esc(cp.fac)}">${mi('cpm',cp.monto,'Monto total de la factura')}<select id=cpc onchange="cp.caja=this.value"><option value="">¿Se pagó con plata de la caja?</option><option value=si ${cp.caja==='si'?'selected':''}>Sí, salió de la caja</option><option value=no ${cp.caja==='no'?'selected':''}>No, se pagó de otra forma</option></select><div class=sec style="margin-top:6px">Items comprados</div><input id=cbq type=search autocomplete=off placeholder="🔍 Buscar item" value="${esc(bq)}" oninput="bq=this.value;$('#bl').innerHTML=itemsHTML()"><div id=bl>${itemsHTML()}</div><div class=bar><div><small>Items cargados</small><strong id=bn>${Object.values(cp.lin).filter(q=>q>0).length}</strong></div><button class="b ok" onclick="compraOk()">Registrar compra</button></div>`,
 how:()=>`${hd('¿Cómo paga?','sell')}<p>Total: <b>${gs(cartT())}</b></p><div class=qa><button class="qt n" onclick="vender('contado')">${IC.cash}Contado</button><button class="qt y" onclick="vender('credito')">${IC.clock}Crédito</button></div>`,
 medio:()=>`${hd('¿Con qué paga?',pend.tipo==='venta'?'how':'debt')}<p>Total: <b>${gs(pend.tipo==='venta'?cartT():pend.body.monto)}</b></p><div class=qa>${MEDIOS.map(x=>`<button class="qt ${x[3]}" onclick="medioPago('${x[0]}')">${IC[x[2]]}${x[1]}</button>`).join('')}</div>`,
 boleta:()=>`${hd('Boleta del POS','medio')}<p>${MN[pend.body.medio]} · <b>${gs(pend.tipo==='venta'?cartT():pend.body.monto)}</b></p><p class=mut>Escribí el número de la boleta que imprimió el POS.</p><input id=bo type=text inputmode=numeric autocomplete=off placeholder="Nº de boleta"><button class="b ok" onclick="boletaOk()">Continuar</button>`,
-client:()=>`${hd('¿A quién se fía?','how')}${buscador()}<div id=cl>${cliHTML(S.cli,'elegirCliente')}</div><div class=sec>Cliente nuevo</div><input id=nc placeholder="Nombre"><input id=ne placeholder="Empresa (opcional)"><input id=np type=tel placeholder="Teléfono (opcional)"><button class="b ghost" onclick="nuevoCliente()">Agregar y fiar</button>`,
+client:()=>`${hd('¿A quién se fía?','how')}${buscador()}<div id=cl>${cliHTML(S.cli,'elegirCliente')}</div><div class=sec>Cliente nuevo</div><input id=nc placeholder="Nombre y apellido"><input id=ni placeholder="Cédula (si no tiene, se usa el nombre)"><input id=ne placeholder="Empresa (opcional)"><input id=np type=tel inputmode=tel placeholder="Celular"><p id=nce class=er></p><button class="b ghost" onclick="nuevoCliente()">Agregar y fiar</button>`,
 firma:()=>`${hd('Firma del cliente',pend&&pend.tipo==='pago'?'debt':'client')}${err?`<p class=er>${err}</p>`:''}<p class=mut>${sel.nombre}, firmá con el dedo.${offConf?' (Sin conexión: se confirma con firma.)':''}</p><canvas id=sg width=600 height=260></canvas><button class="b ok" onclick="sigOk()">Confirmar</button><button class="b ghost" onclick="go('firma')">Borrar firma</button>${!offConf&&navigator.onLine?(sel.tiene_pin?`<button class="b ghost" onclick="usarPin()">Usar el PIN del cliente</button>`:`<button class="b ghost" onclick="crearPin()">Crear un PIN para el cliente</button>`):''}`,
-ok:()=>`<div class=full><div>✓</div><h1>Registrado</h1><p>${msg}</p>${comp?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="enviarWA()">Enviar comprobante por WhatsApp</button><button class="b ghost" style="color:#fff;border-color:#fff;max-width:360px" onclick="comp=null;go('home')">Listo</button>`:''}</div>`,
+ok:()=>`<div class=full><div>✓</div><h1>Registrado</h1><p>${msg}</p>${prt?`${CFG().comanda.imprimir?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="imprimirVenta('comanda')">Imprimir comanda</button>`:''}${CFG().ticket.imprimir?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="imprimirVenta('ticket')">Imprimir ticket</button>`:''}`:''}${comp?`<button class=b style="background:#fff;color:var(--ok);max-width:360px" onclick="enviarWA()">Enviar comprobante por WhatsApp</button>`:''}${comp||prt?`<button class="b ghost" style="color:#fff;border-color:#fff;max-width:360px" onclick="comp=null;prt=null;go('home')">Listo</button>`:''}</div>`,
 debts:()=>S.cli.some(c=>c.saldo>0)?`${hd('Cobrar deuda','home')}${buscador()}<div id=cl>${cliHTML(S.cli.filter(c=>c.saldo>0),'elegirDeuda')}</div>`:`${hd('Cobrar deuda','home')}<p>Nadie debe nada 🎉</p>`,
 debt:()=>`${hd(sel.nombre,'debts')}<p>Debe <b>${gs(sel.saldo)}</b></p><button class="b ok" onclick="pagar(${sel.saldo})">Pagó todo</button>${mi('pa',0,'Pago parcial')}<button class="b ghost" onclick="const m=monto('#pa');if(m>0&&m<=sel.saldo)pagar(m)">Registrar pago parcial</button>`,
 gasto:()=>`${hd('Gasto de caja','home')}<p class=mut>Anotá lo que se pagó con plata de la caja.</p><input id=gc placeholder="¿En qué se gastó? (ej: hielo)">${mi('gm',0,'Monto')}<p id=ge class=er></p><button class="b ok" onclick="gastoOk()">Registrar gasto</button>`,
