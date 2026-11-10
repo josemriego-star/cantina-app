@@ -2,7 +2,13 @@
    y desplegables del Dashboard. Usa las funciones de admin.html (A, fm, gs, esc, show, hoyS, norm, hh, MN). */
 (function () {
   const st = document.createElement('style');
-  st.textContent = 'summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}.sm{display:flex;justify-content:space-between;gap:8px;padding:12px 14px;align-items:center}.sm::before{content:"▸";color:#5F6F76;margin-right:6px}details[open]>.sm::before{content:"▾"}.sub{border-top:1px solid #DDEBDD;padding:8px 14px}.hm td,.hm th{white-space:nowrap}';
+  st.textContent = 'summary{cursor:pointer;list-style:none}summary::-webkit-details-marker{display:none}.sm{display:flex;justify-content:space-between;gap:8px;padding:12px 14px;align-items:center}.sm::before{content:"▸";color:#5F6F76;margin-right:6px}details[open]>.sm::before{content:"▾"}.sub{border-top:1px solid #DDEBDD;padding:8px 14px}.hm td,.hm th{white-space:nowrap}'
+    + 'input[type=date]{-webkit-appearance:none;appearance:none;display:block;height:40px;min-height:40px;margin:0;padding:0 10px;font-size:15px;line-height:40px;text-align:left}input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.2em}'
+    + '.dtr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.dtr label{display:block;font-size:13px;color:#5F6F76}.dtr input{width:100%;margin-top:3px}'
+    + '.sm{padding:8px 12px;gap:8px}.sm>b:first-of-type{flex:1;min-width:0;overflow-wrap:anywhere}.sm>span:last-child{display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;white-space:nowrap;margin-left:auto;text-align:right}'
+    + '.sub{padding:6px 12px;display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:space-between;align-items:center}'
+    + '.dvr{border-top:1px solid #DDEBDD;padding:6px 12px}.dvh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}.dvh>span{min-width:0;flex:1;overflow-wrap:anywhere}.dvh>b{flex:none;white-space:nowrap}.dvl{font-size:12.5px;color:#5F6F76;line-height:1.3;overflow-wrap:anywhere}'
+    + '.empn{font-size:13px;opacity:.92;line-height:1.2}.hdr .elogo{height:38px;max-width:96px;object-fit:contain;background:#fff;border-radius:8px;padding:3px;flex:none}.hdr>div{min-width:0}.hdr h1{line-height:1.15}';
   document.head.appendChild(st);
 })();
 const VX = {};
@@ -21,6 +27,8 @@ const barsSvg = (d, col) => {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${d.map((x, i) => { const h = x.v / mx * al, X = (i * bw + g / 2).toFixed(1), w = Math.max(1, bw - g).toFixed(1);
     return `<g><title>${esc(x.t)}</title><rect x="${X}" y="${(H - pb - h).toFixed(1)}" width="${w}" height="${h.toFixed(1)}" fill="${col || '#1B5E3B'}"/>${i % st === 0 ? `<text x="${(+X + w / 2).toFixed(1)}" y="${H - 6}" font-size="11" text-anchor="middle" fill="#5F6F76">${esc(x.l)}</text>` : ''}</g>`; }).join('')}<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="#DDEBDD"/></svg>`;
 };
+const EMPR = () => (typeof CFGD !== 'undefined' && CFGD && CFGD.empresa) || { nombre: '', logo: '' };
+const hdrHTML = () => { const e = EMPR(); return `<img class=logo src="icon-claro.png" alt=""><div style="flex:1"><h1>Mercator · Administración</h1>${e.nombre ? `<div class=empn>${esc(e.nombre)}</div>` : ''}</div>${e.logo ? `<img class=elogo src="${e.logo}" alt="">` : ''}<button class=bt onclick="S.token=null;sv();R()">Salir</button>`; };
 function navTo(k) { if (k === 'cli') CLI.id = null; if (k === 'cob') COB.mk = null; show(k); }
 
 /* ---------- Dashboard: detalle al tocar Contado / Crédito ---------- */
@@ -31,9 +39,9 @@ async function ddHTML() {
   const agr = (arr, fnEmp) => { const m = new Map(); for (const x of arr) { const e = fnEmp(x); if (!m.has(e)) m.set(e, []); m.get(e).push(x); } return [...m]; };
   const emp = x => x.empresa || (x.cliente ? '(sin empresa)' : 'Venta de mostrador');
   const vt = r.ventas.reduce((s, v) => s + v.total, 0), ct = r.cobros.reduce((s, p) => s + p.monto, 0);
-  const gv = agr(r.ventas, emp).map(([e, l]) => `<details class=cd style="padding:0;margin:6px 0"><summary class=sm><b>${esc(e)}</b><span><small class=mut>${l.length} venta(s)</small> <b>${gs(l.reduce((s, v) => s + v.total, 0))}</b></span></summary>${l.map(v => `<div class=sub><div style="display:flex;justify-content:space-between;gap:8px"><span><b>${esc(v.cliente || 'Mostrador')}</b> <small class=mut>· ${hh(v.fecha)}${v.medio ? ' · ' + (MN[v.medio] || v.medio) : ''}</small></span><b>${gs(v.total)}</b></div><small class=mut>${v.lineas.map(l => `${l.cantidad}× ${esc(l.nombre)}`).join(', ')}</small></div>`).join('')}</details>`).join('') || '<p class=mut>Sin ventas en el período</p>';
-  const gc = agr(r.cobros, emp).map(([e, l]) => `<details class=cd style="padding:0;margin:6px 0"><summary class=sm><b>${esc(e)}</b><span><small class=mut>${l.length} cobro(s)</small> <b>${gs(l.reduce((s, v) => s + v.monto, 0))}</b></span></summary>${l.map(p => `<div class=sub style="display:flex;justify-content:space-between;gap:8px"><span>${esc(p.cliente)} <small class=mut>· ${hh(p.fecha)} · ${MN[p.medio] || p.medio}</small></span><b>${gs(p.monto)}</b></div>`).join('')}</details>`).join('') || '<p class=mut>Sin cobros en el período</p>';
-  return `<div class=cd style="border:2px solid var(--ok)"><b>Ventas ${DD === 'contado' ? 'al contado' : 'a crédito'}</b> · ${gs(vt)} <button class="bt s" style="float:right" onclick="ddTog('${DD}')">Cerrar</button>${gv}<div style="margin-top:12px"><b>Cobros de deudas</b> · ${gs(ct)}</div>${gc}</div>`;
+  const gv = agr(r.ventas, emp).map(([e, l]) => `<details class=cd style="padding:0;margin:6px 0"><summary class=sm><b>${esc(e)}</b><span><small class=mut>${l.length} venta(s)</small><b>${gs(l.reduce((s, v) => s + v.total, 0))}</b></span></summary>${l.map(v => `<div class=dvr><div class=dvh><span><b>${esc(v.cliente || 'Mostrador')}</b> <small class=mut>· ${hh(v.fecha)}${v.medio ? ' · ' + (MN[v.medio] || v.medio) : ''}</small></span><b>${gs(v.total)}</b></div><div class=dvl>${v.lineas.map(l => `${l.cantidad}× ${esc(l.nombre)}`).join(', ')}</div></div>`).join('')}</details>`).join('') || '<p class=mut>Sin ventas en el período</p>';
+  const gc = agr(r.cobros, emp).map(([e, l]) => `<details class=cd style="padding:0;margin:6px 0"><summary class=sm><b>${esc(e)}</b><span><small class=mut>${l.length} cobro(s)</small><b>${gs(l.reduce((s, v) => s + v.monto, 0))}</b></span></summary>${l.map(p => `<div class=dvr><div class=dvh><span>${esc(p.cliente)} <small class=mut>· ${hh(p.fecha)} · ${MN[p.medio] || p.medio}</small></span><b>${gs(p.monto)}</b></div></div>`).join('')}</details>`).join('') || '<p class=mut>Sin cobros en el período</p>';
+  return `<div class=cd style="border:2px solid var(--ok);padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Ventas ${DD === 'contado' ? 'al contado' : 'a crédito'} · ${gs(vt)}</b><button class="bt s" onclick="ddTog('${DD}')">Cerrar</button></div>${gv}<div style="margin-top:10px"><b>Cobros de deudas · ${gs(ct)}</b></div>${gc}</div>`;
 }
 
 /* ---------- Comparativo ---------- */
@@ -81,14 +89,15 @@ function ecRows(d, ant) {
 function ecCard(d) {
   const r = ecRows(d, CLI.ant), c = d.cliente, ini = c.nombre.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const dm = f => { const x = new Date(f); return String(x.getDate()).padStart(2, '0') + '/' + String(x.getMonth() + 1).padStart(2, '0'); };
-  return `<div id=ecp style="background:#fff;border:1px solid #ece7db;border-radius:14px;padding:14px;font-family:'Open Sans','Noto Sans',Arial,sans-serif;color:#2c2c2a">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px"><div><p style="margin:0;font-weight:600;font-size:16px">Estado de cuenta</p><p style="margin:0;font-size:13px;color:#7a756a">Ventas a crédito</p></div><div style="text-align:right"><p style="margin:0;font-size:13px;color:#7a756a;text-transform:capitalize">${esc(cliEtiqueta())}</p><p style="margin:0;font-size:12px;color:#9a9488">${new Date().toLocaleDateString('es-PY')}</p></div></div>
-  <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #ece7db;border-bottom:1px solid #ece7db"><div style="width:40px;height:40px;border-radius:50%;background:#DFF5E1;color:#1B5E3B;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;flex-shrink:0">${esc(ini)}</div><div><p style="margin:0;font-weight:600;font-size:15px">${esc(c.nombre)}</p><p style="margin:0;font-size:12px;color:#7a756a">${esc([c.cedula && 'CI: ' + c.cedula, c.empresa].filter(Boolean).join(' · ') || 'Cliente a crédito')}</p>${CLI.ant ? `<p style="margin:0;font-size:12px;color:#7a756a">Saldo anterior ${fm(d.saldo_anterior)} Gs</p>` : ''}</div></div>
+  const E = EMPR();
+  return `<div id=ecp style="background:#fff;border:1px solid #ece7db;border-radius:14px;padding:12px 14px;font-family:'Open Sans','Noto Sans',Arial,sans-serif;color:#2c2c2a">
+  ${E.nombre || E.logo ? `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">${E.logo ? `<img src="${E.logo}" style="height:38px;max-width:110px;object-fit:contain">` : ''}<span style="font-weight:700;font-size:15px;color:#1B5E3B">${esc(E.nombre)}</span></div>` : ''}<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px"><div><p style="margin:0;font-weight:600;font-size:16px">Estado de cuenta</p><p style="margin:0;font-size:13px;color:#7a756a">Ventas a crédito</p></div><div style="text-align:right"><p style="margin:0;font-size:13px;color:#7a756a;text-transform:capitalize">${esc(cliEtiqueta())}</p><p style="margin:0;font-size:12px;color:#9a9488">${new Date().toLocaleDateString('es-PY')}</p></div></div>
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #ece7db;border-bottom:1px solid #ece7db"><div style="width:40px;height:40px;border-radius:50%;background:#DFF5E1;color:#1B5E3B;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;flex-shrink:0">${esc(ini)}</div><div><p style="margin:0;font-weight:600;font-size:15px">${esc(c.nombre)}</p><p style="margin:0;font-size:12px;color:#7a756a">${esc([c.cedula && 'CI: ' + c.cedula, c.empresa].filter(Boolean).join(' · ') || 'Cliente a crédito')}</p>${CLI.ant ? `<p style="margin:0;font-size:12px;color:#7a756a">Saldo anterior ${fm(d.saldo_anterior)} Gs</p>` : ''}</div></div>
   <table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;margin-top:8px"><colgroup><col style="width:13%"><col style="width:50%"><col style="width:18.5%"><col style="width:18.5%"></colgroup><thead><tr style="color:#7a756a;font-size:12px"><th style="text-align:left;font-weight:400;padding:6px 0;border:0">Fecha</th><th style="text-align:left;font-weight:400;border:0">Detalle (cant. × precio)</th><th style="text-align:right;font-weight:400;border:0">Monto</th><th style="text-align:right;font-weight:400;border:0">Saldo</th></tr></thead><tbody>
-  ${r.rows.map(x => `<tr style="border-top:1px solid #ece7db"><td style="padding:8px 0;vertical-align:top;text-align:left;border:0">${dm(x.f)}</td><td style="vertical-align:top;text-align:left;border:0;color:${x.t === 'p' ? '#1B5E3B' : 'inherit'}">${x.t === 'p' ? '<div style="font-size:12px">Pago</div>' : x.lineas.map(l => `<div style="font-size:12px;line-height:1.45">${l.cantidad} ${esc(l.nombre)} × ${fm(l.precio_unit)}</div>`).join('')}</td><td style="text-align:right;vertical-align:top;border:0;color:${x.t === 'p' ? '#1B5E3B' : 'inherit'}">${x.t === 'p' ? '−' : ''}${fm(x.monto)}</td><td style="text-align:right;vertical-align:top;border:0">${fm(x.saldo)}</td></tr>`).join('') || '<tr><td colspan=4 style="text-align:center;color:#a8a292;padding:20px 0;border:0">Sin movimientos en este período</td></tr>'}</tbody></table>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><div style="background:#F1EFE8;border-radius:12px;padding:10px 12px"><p style="margin:0;font-size:12px;color:#7a756a">Compras</p><p style="margin:0;font-size:18px;font-weight:600">${fm(r.compras)}</p></div><div style="background:#F1EFE8;border-radius:12px;padding:10px 12px"><p style="margin:0;font-size:12px;color:#7a756a">Pagos</p><p style="margin:0;font-size:18px;font-weight:600;color:#1B5E3B">${fm(r.pagos)}</p></div></div>
-  <div style="background:#FAECE7;border-radius:12px;padding:10px 12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:#712B13">Saldo a pagar</span><span style="font-size:20px;font-weight:600;color:#712B13">${fm(r.saldo)} Gs</span></div>
-  <p style="margin:12px 0 0;font-size:12px;color:#7a756a;line-height:1.45">Si algo no coincide avisa para realizar una verificación</p></div>`;
+  ${r.rows.map(x => `<tr style="border-top:1px solid #ece7db"><td style="padding:6px 0;vertical-align:top;text-align:left;border:0">${dm(x.f)}</td><td style="vertical-align:top;text-align:left;border:0;color:${x.t === 'p' ? '#1B5E3B' : 'inherit'}">${x.t === 'p' ? '<div style="font-size:12px">Pago</div>' : x.lineas.map(l => `<div style="font-size:12px;line-height:1.45">${l.cantidad} ${esc(l.nombre)} × ${fm(l.precio_unit)}</div>`).join('')}</td><td style="text-align:right;vertical-align:top;border:0;color:${x.t === 'p' ? '#1B5E3B' : 'inherit'}">${x.t === 'p' ? '−' : ''}${fm(x.monto)}</td><td style="text-align:right;vertical-align:top;border:0">${fm(x.saldo)}</td></tr>`).join('') || '<tr><td colspan=4 style="text-align:center;color:#a8a292;padding:20px 0;border:0">Sin movimientos en este período</td></tr>'}</tbody></table>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><div style="background:#F1EFE8;border-radius:12px;padding:8px 12px"><p style="margin:0;font-size:12px;color:#7a756a">Compras</p><p style="margin:0;font-size:18px;font-weight:600">${fm(r.compras)}</p></div><div style="background:#F1EFE8;border-radius:12px;padding:8px 12px"><p style="margin:0;font-size:12px;color:#7a756a">Pagos</p><p style="margin:0;font-size:18px;font-weight:600;color:#1B5E3B">${fm(r.pagos)}</p></div></div>
+  <div style="background:#FAECE7;border-radius:12px;padding:8px 12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:#712B13">Saldo a pagar</span><span style="font-size:20px;font-weight:600;color:#712B13">${fm(r.saldo)} Gs</span></div>
+  <p style="margin:10px 0 0;font-size:12px;color:#7a756a;line-height:1.4">Si algo no coincide avisa para realizar una verificación</p></div>`;
 }
 VX.cli = async () => {
   if (!CLI.id) {
@@ -98,11 +107,11 @@ VX.cli = async () => {
   }
   const [a, b] = cliRango();
   CLI.data = await A(`/api/clientes/${CLI.id}/estado-cuenta?desde=${a}&hasta=${b}`);
-  return `<div class=bar><button class=bt onclick="CLI.id=null;show('cli')">← Volver</button><span style="flex:1"></span><button class="bt ok" onclick="cliPng()">Exportar imagen</button><button class="bt p" onclick="cliWA()">WhatsApp</button></div>
+  return `<div style="max-width:560px;margin:0 auto"><div class=bar><button class=bt onclick="CLI.id=null;show('cli')">← Volver</button><span style="flex:1"></span><button class="bt ok" onclick="cliPng()">Exportar imagen</button><button class="bt p" onclick="cliWA()">WhatsApp</button></div>
   <div class=bar>${[['mes', 'Por mes'], ['rango', 'Por rango de fechas'], ['todo', 'Todos']].map(([k, n]) => `<button class="bt s ${CLI.modo === k ? 'p' : ''}" onclick="cliSet('modo','${k}')">${n}</button>`).join('')}</div>
   ${CLI.modo === 'mes' ? mnav(CLI.mes, 'cliMes', mesMas(CLI.mes, 1) <= mesHoy()) : ''}
-  ${CLI.modo === 'rango' ? `<div class=bar><label class=mut>Desde <input type=date value="${cliRango()[0]}" onchange="CLI.desde=this.value;show('cli')"></label><label class=mut>Hasta <input type=date value="${cliRango()[1]}" onchange="CLI.hasta=this.value;show('cli')"></label></div>` : ''}
-  <label style="display:block;margin:0 0 10px"><input type=checkbox ${CLI.ant ? 'checked' : ''} onchange="cliSet('ant',this.checked)" style="width:auto;margin:0 8px 0 0">Mostrar saldo anterior</label>${ecCard(CLI.data)}`;
+  ${CLI.modo === 'rango' ? `<div class=dtr><label>Desde<input type=date value="${cliRango()[0]}" onchange="CLI.desde=this.value;show('cli')"></label><label>Hasta<input type=date value="${cliRango()[1]}" onchange="CLI.hasta=this.value;show('cli')"></label></div>` : ''}
+  <label style="display:block;margin:0 0 10px"><input type=checkbox ${CLI.ant ? 'checked' : ''} onchange="cliSet('ant',this.checked)" style="width:auto;margin:0 8px 0 0">Mostrar saldo anterior</label>${ecCard(CLI.data)}</div>`;
 };
 function cargarHTI() {
   if (window.htmlToImage) return Promise.resolve(window.htmlToImage);
@@ -117,23 +126,36 @@ async function cliImagen() {
   catch (e) { alert(e.message || 'No se pudo generar la imagen'); return null; }
 }
 function cliDescargar(u) { const a = document.createElement('a'); a.href = u; a.download = 'estado-de-cuenta-' + CLI.data.cliente.nombre.replace(/\s+/g, '-') + '.png'; a.click(); }
-async function cliCompartir(u) {
-  const c = CLI.data.cliente, f = new File([await (await fetch(u)).blob()], 'estado-de-cuenta.png', { type: 'image/png' });
-  if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: 'Estado de cuenta' }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-  cliDescargar(u);
-  let n = String(c.telefono || '').replace(/\D/g, ''); if (n.startsWith('0')) n = '595' + n.slice(1);
-  const t = `Estado de cuenta de ${c.nombre}. Saldo a pagar: ${fm(ecRows(CLI.data, CLI.ant).saldo)} Gs`;
-  alert('Se descargó la imagen. Adjuntala en el WhatsApp que se abre.');
-  window.open(`https://wa.me/${n}?text=${encodeURIComponent(t)}`, '_blank');
+const esMovil = () => !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+function cliWaUrl() {
+  const c = CLI.data.cliente, E = EMPR(); let n = String(c.telefono || '').replace(/\D/g, ''); if (n.startsWith('0')) n = '595' + n.slice(1);
+  const t = `${E.nombre ? E.nombre + ' · ' : ''}Estado de cuenta de ${c.nombre}. Saldo a pagar: ${fm(ecRows(CLI.data, CLI.ant).saldo)} Gs`;
+  return `https://wa.me/${n}?text=${encodeURIComponent(t)}`;
 }
-async function cliWA() { const u = await cliImagen(); if (u) cliCompartir(u); }
+/* pu: promesa con la imagen (dataURL) */
+async function cliEnviar(pu) {
+  if (esMovil()) {
+    const u = await pu; if (!u) return;
+    const f = new File([await (await fetch(u)).blob()], 'estado-de-cuenta.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { try { await navigator.share({ files: [f], title: 'Estado de cuenta' }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    cliDescargar(u); alert('Se descargó la imagen. Adjuntala en el WhatsApp que se abre.'); window.open(cliWaUrl(), '_blank'); return;
+  }
+  const w = window.open('about:blank', '_blank'); let ok = false;
+  try { if (!navigator.clipboard || !window.ClipboardItem) throw 0;
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pu.then(async u => { if (!u) throw new Error('sin imagen'); return await (await fetch(u)).blob(); }) })]); ok = true; } catch (e) {}
+  const u = await pu; if (!u) { if (w) w.close(); return; }
+  if (!ok) cliDescargar(u);
+  if (w) w.location.href = cliWaUrl(); else window.open(cliWaUrl(), '_blank');
+  alert(ok ? 'La imagen quedó copiada. En el chat de WhatsApp pegala con Cmd+V (Ctrl+V en Windows).' : 'Se descargó la imagen. Adjuntala en el chat de WhatsApp.');
+}
+function cliWA() { cliEnviar(cliImagen()); }
 async function cliPng() {
   const u = await cliImagen(); if (!u) return;
   const d = document.createElement('div'); d.className = 'dlg';
-  d.innerHTML = `<div class=bx style="max-height:92vh;overflow:auto"><h3>Estado de cuenta</h3><img src="${u}" style="width:100%;border:1px solid #DDEBDD;border-radius:10px;margin-bottom:14px"><div class=bs><button class=c>Cerrar</button><button class=d>Descargar</button><button class=p>WhatsApp</button></div></div>`;
+  d.innerHTML = `<div class=bx style="display:flex;flex-direction:column;max-height:94vh;max-width:480px;padding:14px"><h3 style="margin:0 0 8px;font-size:17px">Estado de cuenta</h3><div style="overflow:auto;flex:1;min-height:0;margin-bottom:10px;-webkit-overflow-scrolling:touch"><img src="${u}" style="display:block;width:100%;height:auto;border:1px solid #DDEBDD;border-radius:10px"></div><div class=bs style="flex:none;flex-wrap:wrap"><button class=c style="flex:1 1 80px;padding:0 8px">Cerrar</button><button class=d style="flex:1 1 100px;padding:0 8px">Descargar</button><button class=p style="flex:1 1 100px;padding:0 8px">WhatsApp</button></div></div>`;
   d.querySelector('.c').onclick = () => d.remove();
   d.querySelector('.d').onclick = () => cliDescargar(u);
-  d.querySelector('.p').onclick = () => cliCompartir(u);
+  d.querySelector('.p').onclick = () => cliEnviar(Promise.resolve(u));
   document.body.appendChild(d);
 }
 

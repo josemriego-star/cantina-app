@@ -10,6 +10,7 @@ window.PRT = (function () {
   const MEDIO = { efectivo: 'Efectivo', pos_debito: 'POS Débito', pos_credito: 'POS Crédito', transferencia: 'Transferencia' };
   const PIE_EC = 'Cada movimiento fue confirmado por el cliente con PIN o firma. Si algo no coincide avisa para realizar una verificación.';
   const ln = '<div class=p-ln></div>';
+  const nomEmp = cfg => (cfg && cfg.empresa && cfg.empresa.nombre) || '';
 
   /* v = { id, fecha, empleada, cliente, tipo, lineas:[{cant, nombre, precio, cat, det}] } */
   function comanda(cfg, v) {
@@ -27,7 +28,7 @@ window.PRT = (function () {
   /* v además lleva: total, medio, comprobante */
   function ticket(cfg, v) {
     const t = cfg.ticket || {}, total = v.total != null ? v.total : (v.lineas || []).reduce((s, l) => s + l.cant * l.precio, 0);
-    return (t.negocio ? `<div class="p-c p-b p-big">${e(t.negocio)}</div>` : '<div class="p-c p-b p-big">Mercator</div>')
+    return `<div class="p-c p-b p-big">${e(nomEmp(cfg) || t.negocio || 'Mercator')}</div>`
       + (t.ruc ? `<div class=p-c>RUC: ${e(t.ruc)}</div>` : '') + (t.direccion ? `<div class=p-c>${e(t.direccion)}</div>` : '')
       + (t.telefono ? `<div class=p-c>Tel: ${e(t.telefono)}</div>` : '')
       + ln + `<div class=p-r><span>N° ${e(v.id)}</span><span>${fh(v.fecha)}</span></div>`
@@ -46,20 +47,20 @@ window.PRT = (function () {
 .ecw table{width:100%;border-collapse:collapse;margin:8px 0}.ecw th{background:#DFF5E1;color:#1B5E3B;text-align:left;padding:6px;font-size:12px}.ecw td{padding:6px;border-bottom:1px solid #ddd;vertical-align:top}
 .ecw .n{text-align:right;white-space:nowrap}.ecw .edet{color:#555;font-size:12px}.ecw .tot td{font-weight:700;border-top:2px solid #1B5E3B;border-bottom:0}.ecw .pie{margin-top:12px;font-size:12px;color:#444}`;
   function estadoCuenta(cfg, ec) {
-    const c = ec.cliente, neg = (cfg.ticket && cfg.ticket.negocio) || 'Mercator';
+    const c = ec.cliente, neg = nomEmp(cfg) || (cfg.ticket && cfg.ticket.negocio) || 'Mercator', lg = cfg.empresa && cfg.empresa.logo;
     const filas = ec.movimientos.map(m => {
       const compra = m.tipo === 'compra';
       const det = compra ? m.lineas.map(l => `${l.cantidad} × ${e(l.nombre)} × ${n(l.precio_unit)}`).join('<br>') : 'Pago recibido';
       return `<tr><td>${fd(m.fecha)}</td><td>${compra ? 'Compra a crédito' : 'Pago'}<div class=edet>${det}</div></td><td class=n>${compra ? gs(m.monto) : ''}</td><td class=n>${compra ? '' : gs(m.monto)}</td><td class=n>${gs(m.saldo)}</td></tr>`;
     }).join('');
-    return `<div class=ecw><h2>${e(neg)} · Estado de cuenta</h2><div class=sub>${e(c.nombre)}${c.empresa ? ' · ' + e(c.empresa) : ''}<br>Cédula: ${e(c.cedula || c.nombre)}${c.telefono ? ' · Tel: ' + e(c.telefono) : ''}<br>Período: ${fdc(ec.desde)} al ${fdc(ec.hasta)}</div>`
+    return `<div class=ecw>${lg ? `<img src="${lg}" style="height:50px;margin-bottom:6px"><br>` : ''}<h2>${e(neg)} · Estado de cuenta</h2><div class=sub>${e(c.nombre)}${c.empresa ? ' · ' + e(c.empresa) : ''}<br>Cédula: ${e(c.cedula || c.nombre)}${c.telefono ? ' · Tel: ' + e(c.telefono) : ''}<br>Período: ${fdc(ec.desde)} al ${fdc(ec.hasta)}</div>`
       + `<table><tr><th>Fecha</th><th>Detalle</th><th class=n>Compras</th><th class=n>Pagos</th><th class=n>Saldo</th></tr>`
       + `<tr><td colspan=4><i>Saldo anterior</i></td><td class=n>${gs(ec.saldo_anterior)}</td></tr>${filas || '<tr><td colspan=5><i>Sin movimientos en el período</i></td></tr>'}`
       + `<tr class=tot><td colspan=2>Totales del período</td><td class=n>${gs(ec.total_compras)}</td><td class=n>${gs(ec.total_pagos)}</td><td class=n>${gs(ec.saldo_final)}</td></tr></table>`
       + `<div class=pie>${PIE_EC}</div></div>`;
   }
   function estadoTexto(cfg, ec) {
-    const c = ec.cliente, neg = (cfg.ticket && cfg.ticket.negocio) || 'Mercator';
+    const c = ec.cliente, neg = nomEmp(cfg) || (cfg.ticket && cfg.ticket.negocio) || 'Mercator';
     const mv = ec.movimientos.map(m => m.tipo === 'compra'
       ? `${fd(m.fecha)} · Compra ${gs(m.monto)}\n` + m.lineas.map(l => `   ${l.cantidad} × ${l.nombre} × ${n(l.precio_unit)}`).join('\n')
       : `${fd(m.fecha)} · Pago ${gs(m.monto)}`).join('\n');
