@@ -1,5 +1,5 @@
 // Guarda la app en el aparato para que abra sin internet. Primero busca versión nueva; si no hay red, usa la guardada.
-const V = 'cantina-v26';
+const V = 'cantina-v27';
 const ARCH = ['./', 'index.html', 'admin.html', 'config.js', 'imprimir.js', 'dialogo.js', 'informes.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-180.png', 'icon-claro.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(ARCH)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x)))).then(() => self.clients.claim())));
@@ -7,5 +7,5 @@ self.addEventListener('fetch', e => {
   const r = e.request;
   if (r.method !== 'GET' || new URL(r.url).origin !== location.origin) return;
   e.respondWith(fetch(r).then(res => { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); return res; })
-    .catch(() => caches.match(r).then(m => m || caches.match('index.html'))));
+    .catch(() => caches.match(r, { ignoreSearch: true }).then(m => m || caches.match('index.html'))));
 });

@@ -23,11 +23,12 @@ input,select{font:inherit;padding:9px 10px;border:1px solid #D8D3C5;border-radiu
 .hdr{display:flex;align-items:center;gap:10px;background:#1B5E3B;color:#fff;border-radius:14px;padding:10px 14px;margin-bottom:12px}.hdr h1{margin:0;flex:1;font-size:20px;color:#fff}.hdr .logo{width:42px;height:42px}.hdr .ic{width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center}.hdr .ic img{width:28px;height:28px}.hdr .bt{background:#DFF5E1;color:#1B5E3B;border-color:#DFF5E1}.brand{display:flex;align-items:center;gap:10px;margin:4px 0 8px}.brand img{width:44px;height:44px}.brand b{font-size:24px;color:#1B5E3B}
 .rr{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.rr select{flex:1 1 150px;min-width:0;margin:0}.rr input{width:80px;margin:0}
 </style></head><body><div id="app"></div>
-<script src="config.js"></script>
-<script src="dialogo.js"></script>
-<script src="informes.js"></script>
-<script src="imprimir.js"></script>
+<script src="config.js?v=26"></script>
+<script src="dialogo.js?v=26"></script>
+<script src="informes.js?v=26"></script>
+<script src="imprimir.js?v=26"></script>
 <script>
+(function(){const m=e=>{const a=document.getElementById('app');if(a&&!a.innerHTML.trim())a.innerHTML='<p style="margin:16px;padding:12px;background:#FAECE7;color:#712B13;border-radius:10px">No se pudo cargar la pantalla ('+String(e&&e.message||e)+'). Recargá la página; si sigue igual, comprobá que estén subidos todos los archivos de la última versión.</p>'};window.addEventListener('error',e=>m(e.error||e.message));window.addEventListener('unhandledrejection',e=>m(e.reason))})();
 const K='cantina_admin';let S={};try{S=JSON.parse(localStorage.getItem(K))||{}}catch(e){}
 const sv=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const $=s=>document.querySelector(s),fm=n=>String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),gs=n=>fm(n)+' Gs';
@@ -63,7 +64,7 @@ async function R(){
     try{usr=(await A('/api/usuarios/publico')).filter(u=>u.rol==='admin')}catch(e){a.innerHTML=`<div class=brand><img src="icon-192.png" alt=""><b>Mercator</b></div><h1>Administración</h1><p class=er>${esc(e.message)}</p><button class=bt onclick="R()">Reintentar</button>`;return}
     a.innerHTML=`<div class=brand><img src="icon-192.png" alt=""><b>Mercator</b></div><h1>Administración</h1><select id=lu>${usr.map(u=>`<option value=${u.id}>${esc(u.nombre)}</option>`).join('')}</select><input id=lp type=password inputmode=numeric placeholder="PIN" onkeydown="if(event.key==='Enter')entrar()"><button class="bt ok" onclick="entrar()">Entrar</button><p id=le class=er style="display:none"></p>`;return}
   try{if(!CFGD)CFGD=await A('/api/config')}catch(e){}
-  a.innerHTML=`<div class=hdr id=hdr>${hdrHTML()}</div><nav>${[['dash','Dashboard'],['hoy','Hoy'],['cmp','Comparativo'],['cli','Clientes'],['cob','Cobranzas'],['emp','Empresas'],['turnos','Turnos'],['stock','Stock'],['comp','Compras'],['prod','Productos'],['pers','Personas'],['imp','Importar Excel'],['cfg','Configuración'],['aud','Auditoría']].map(([k,n])=>`<button id=t_${k} onclick="navTo('${k}')">${n}</button>`).join('')}</nav><div id=c></div>`;
+  a.innerHTML=`<div class=hdr id=hdr>${typeof hdrHTML==='function'?hdrHTML():'<h1>Mercator · Administración</h1>'}</div><nav>${[['dash','Dashboard'],['hoy','Hoy'],['cmp','Comparativo'],['cli','Clientes'],['cob','Cobranzas'],['emp','Empresas'],['turnos','Turnos'],['stock','Stock'],['comp','Compras'],['prod','Productos'],['pers','Personas'],['imp','Importar Excel'],['cfg','Configuración'],['aud','Auditoría']].map(([k,n])=>`<button id=t_${k} onclick="navTo('${k}')">${n}</button>`).join('')}</nav><div id=c></div>`;
   show(T)}
 async function entrar(){
   try{const r=await post('/api/login',{usuario_id:+$('#lu').value,pin:$('#lp').value});
@@ -318,7 +319,7 @@ function cfgHTML(){const im=CFE.modo==='impreso';
    <div style="margin-top:6px">${ck('ticket','mostrar_empleada','Mostrar quién atendió')}${ck('ticket','mostrar_detalle_combo','Mostrar el detalle de los combos')}</div>${cop('ticket')}</div>
   <div class=cd><b>Vista previa</b> <span class=mut>· con una venta de ejemplo</span><div id=cfp style="margin-top:8px">${cfgPrevHTML()}</div></div>`:''}
   <button class="bt ok" onclick="cfgGuardar()">Guardar configuración</button> ${im?'<button class=bt onclick="cfgProbar()">Imprimir prueba</button>':''}`}
-async function cfgV(){if(!CFE)CFE=await A('/api/config');return `<div id=cfx>${cfgHTML()}</div>`}
+async function cfgV(){if(!CFE)CFE=await A('/api/config');if(!CFE.empresa)CFE.empresa={nombre:'',logo:''};return `<div id=cfx>${cfgHTML()}</div>`}
 async function cfgGuardar(){try{const{categorias_disponibles,...body}=CFE;CFE=await post('/api/admin/config',body,'PUT');CFGD=CFE;cfgDraw();const hh2=$('#hdr');if(hh2)hh2.innerHTML=hdrHTML();alert('Configuración guardada')}catch(e){alert(e.message)}}
 function cfgProbar(){if(!PRT.imprimir(PRT.venta(CFE,PRT.muestra()),CFE.ancho_mm))alert('Activá la comanda o el ticket para probar la impresión')}
 
