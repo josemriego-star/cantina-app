@@ -24,6 +24,7 @@ input,select{font:inherit;padding:9px 10px;border:1px solid #D8D3C5;border-radiu
 .rr{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.rr select{flex:1 1 150px;min-width:0;margin:0}.rr input{width:80px;margin:0}
 </style></head><body><div id="app"></div>
 <script src="config.js"></script>
+<script src="dialogo.js"></script>
 <script src="imprimir.js"></script>
 <script>
 const K='cantina_admin';let S={};try{S=JSON.parse(localStorage.getItem(K))||{}}catch(e){}
@@ -72,8 +73,8 @@ async function show(t){
   try{c.innerHTML=await V[t]()}catch(e){c.innerHTML=`<p class=er>${esc(e.message)}</p>`}}
 
 /* ---- acciones ---- */
-function an(tipo,id){const m=prompt('Motivo de la anulación (mínimo 3 letras)');if(!m||m.trim().length<3)return;run(()=>post(`/api/${tipo}/${id}/anular`,{motivo:m.trim()}))}
-function ajuste(id,motivo){const q=dec(prompt(motivo==='entrada'?'¿Cuánto entró?':'¿Cuánto se perdió (merma)?')||'');if(q>0)run(()=>post('/api/admin/stock/ajuste',{item_id:id,cantidad:q,motivo}))}
+async function an(tipo,id){const m=await preguntar('Motivo de la anulación (mínimo 3 letras)');if(!m||m.trim().length<3)return;run(()=>post(`/api/${tipo}/${id}/anular`,{motivo:m.trim()}))}
+async function ajuste(id,motivo){const q=dec(await preguntar(motivo==='entrada'?'¿Cuánto entró?':'¿Cuánto se perdió (merma)?')||'');if(q>0)run(()=>post('/api/admin/stock/ajuste',{item_id:id,cantidad:q,motivo}))}
 function itemNuevo(){const n=$('#in').value.trim();if(n.length<2)return alert('Falta el nombre');
   run(()=>post('/api/admin/items',{nombre:n,unidad:$('#iu').value||'unidad',stock:dec($('#is').value||0),minimo:dec($('#im').value||0),paso:dec($('#ip').value||1)}))}
 function recEd(n){
@@ -92,7 +93,7 @@ const recTxt=p=>p.receta.map(r=>`${(IT.find(i=>i.id===r.item_id)||{nombre:'?'}).
 function prNuevo(){const n=$('#pn').value.trim(),pr=num($('#pp').value||0);if(n.length<2||!(pr>=0))return alert('Falta nombre o precio');
   const cs=$('#pc').checked;
   run(async()=>{await post('/api/admin/productos',{nombre:n,precio:pr,receta:recOut('RN'),categoria:$('#pcat').value||null,controlar_stock:cs,stock_inicial:cs?(dec($('#psi').value||0)||0):0,stock_minimo:cs?(dec($('#pmi').value||0)||0):0});REC.RN=[]})}
-function prPrecio(id){const p=PR.find(x=>x.id===id),v=prompt('Nuevo precio de '+p.nombre,fm(p.precio));if(v!==null&&num(v)>=0)run(()=>post('/api/admin/productos/'+id,{precio:num(v)},'PATCH'))}
+async function prPrecio(id){const p=PR.find(x=>x.id===id),v=await preguntar('Nuevo precio de '+p.nombre,fm(p.precio));if(v!==null&&num(v)>=0)run(()=>post('/api/admin/productos/'+id,{precio:num(v)},'PATCH'))}
 function prRec(id){const p=PR.find(x=>x.id===id);ED=id;REC.RE=p.receta.map(r=>({item_id:r.item_id,cantidad:String(r.cantidad)}));show('prod').then(()=>window.scrollTo(0,0))}
 function edGuardar(){run(async()=>{await post('/api/admin/productos/'+ED,{receta:recOut('RE')},'PATCH');ED=null})}
 function prAct(id,a){run(()=>post('/api/admin/productos/'+id,{activo:a},'PATCH'))}
@@ -124,10 +125,10 @@ function cbGuardar(){
     if(CB.id)await post('/api/admin/productos/'+CB.id,{nombre:n,precio:pr,categoria:CB.categoria||'',partes},'PATCH');
     else await post('/api/admin/productos',{nombre:n,precio:pr,es_combo:true,categoria:CB.categoria||null,partes});
     CBO=false})}
-function clEd(id){const c=CL.find(x=>x.id===id),n=prompt('Nombre y apellido del cliente',c.nombre);if(n===null)return;
-  const ci=prompt('Cédula (vacío = se usa el nombre)',c.cedula&&c.cedula!==c.nombre?c.cedula:'');if(ci===null)return;
-  const e=prompt('Empresa (vacío = sin empresa)',c.empresa||'');if(e===null)return;
-  const t=prompt('Celular',c.telefono||'');if(t===null)return;
+async function clEd(id){const c=CL.find(x=>x.id===id),n=await preguntar('Nombre y apellido del cliente',c.nombre);if(n===null)return;
+  const ci=await preguntar('Cédula (vacío = se usa el nombre)',c.cedula&&c.cedula!==c.nombre?c.cedula:'');if(ci===null)return;
+  const e=await preguntar('Empresa (vacío = sin empresa)',c.empresa||'');if(e===null)return;
+  const t=await preguntar('Celular',c.telefono||'');if(t===null)return;
   run(()=>post('/api/admin/clientes/'+id,{nombre:n.trim()||c.nombre,cedula:ci.trim(),empresa:e.trim(),telefono:t.trim()},'PATCH'))}
 function clNuevo(){const n=$('#cn').value.trim(),t=$('#ct').value.trim();if(n.length<2)return alert('Falta el nombre y apellido');if(!t)return alert('Falta el celular');
   run(()=>post('/api/clientes',{nombre:n,cedula:$('#cc').value.trim()||null,empresa:$('#ce').value.trim()||null,telefono:t}))}
@@ -190,7 +191,7 @@ const pvHTMLA=()=>{const q=norm(PQ2).split(/\s+/).filter(Boolean);
   return PV.filter(x=>q.every(w=>norm(x.nombre).includes(w))).map(x=>`<div class="it ${x.activo?'':'an'}"><div class=m><b>${esc(x.nombre)}</b>${x.activo?'':' <small>(desactivado)</small>'}<br><small class=mut>${x.ruc?'RUC '+esc(x.ruc)+' · ':''}${esc(x.telefono||'Sin teléfono')}</small></div><div class=a><button class="bt s" onclick="pvEdA(${x.id})">Editar</button><button class="bt s" onclick="pvActA(${x.id},${!x.activo})">${x.activo?'Desactivar':'Activar'}</button></div></div>`).join('')||'<p class=mut>Sin proveedores</p>'};
 const pvDrawA=()=>{const e=$('#pva');if(e)e.innerHTML=pvHTMLA()};
 function pvNuevoA(){const n=$('#vn').value.trim();if(n.length<2)return alert('Falta el nombre');run(()=>post('/api/proveedores',{nombre:n,ruc:$('#vr').value.trim()||null,telefono:$('#vt').value.trim()||null}))}
-function pvEdA(id){const x=PV.find(v=>v.id===id),n=prompt('Nombre del proveedor',x.nombre);if(n===null)return;const r=prompt('RUC (vacío = sin RUC)',x.ruc||'');if(r===null)return;const t=prompt('Teléfono (vacío = sin teléfono)',x.telefono||'');if(t===null)return;
+async function pvEdA(id){const x=PV.find(v=>v.id===id),n=await preguntar('Nombre del proveedor',x.nombre);if(n===null)return;const r=await preguntar('RUC (vacío = sin RUC)',x.ruc||'');if(r===null)return;const t=await preguntar('Teléfono (vacío = sin teléfono)',x.telefono||'');if(t===null)return;
   run(()=>post('/api/admin/proveedores/'+id,{nombre:n.trim()||x.nombre,ruc:r.trim(),telefono:t.trim()},'PATCH'))}
 function pvActA(id,a){run(()=>post('/api/admin/proveedores/'+id,{activo:a},'PATCH'))}
 /* carga del día: suma varias entradas de stock juntas */
@@ -203,7 +204,7 @@ const unOpts=sel=>{const v=String(sel||'unidad').toLowerCase(),l=UN.includes(v)?
 const unSel=(id,sel,cb)=>`<select id=${id} onfocus="this.dataset.prev=this.value" onchange="unChange(this,'${cb||''}')">${unOpts(sel)}</select>`;
 async function unChange(el,cb){
   if(el.value==='__nueva'){
-    const n=(prompt('Nombre de la nueva unidad de medida (ej: paquete)')||'').trim().toLowerCase();
+    const n=(await preguntar('Nombre de la nueva unidad de medida (ej: paquete)')||'').trim().toLowerCase();
     if(!n){el.innerHTML=unOpts(el.dataset.prev);return}
     try{await post('/api/admin/unidades',{nombre:n});if(!UN.includes(n)){UN.push(n);UN.sort()}}catch(e){alert(e.message);el.innerHTML=unOpts(el.dataset.prev);return}
     el.innerHTML=unOpts(n)}
@@ -227,7 +228,7 @@ async function cnNiGuardar(){const n=CN.ni.nombre.trim();if(n.length<2)return al
   try{const r=await post('/api/admin/items',{nombre:n,unidad:CN.ni.unidad,stock:0,minimo:dec(CN.ni.minimo||0)||0});if(!IT.some(x=>x.id===r.id))IT.push(r);CN.ni=null;cnAdd(r.id)}catch(e){alert(e.message)}}
 function usNuevo(){const n=$('#un').value.trim(),p=$('#up').value.trim();if(n.length<2||p.length<4)return alert('Falta nombre o PIN');
   run(()=>post('/api/admin/usuarios',{nombre:n,pin:p,rol:$('#ur').value}))}
-function usPin(id){const p=prompt('Nuevo PIN (4 a 8 números; administrador 6 a 8)');if(p)run(()=>post('/api/admin/usuarios/'+id,{pin:p},'PATCH'))}
+async function usPin(id){const p=await preguntar('Nuevo PIN (4 a 8 números; administrador 6 a 8)');if(p)run(()=>post('/api/admin/usuarios/'+id,{pin:p},'PATCH'))}
 function usAct(id,a){run(()=>post('/api/admin/usuarios/'+id,{activo:a},'PATCH'))}
 async function subir(){
   const f=$('#fx').files[0];if(!f)return alert('Elegí el archivo .xlsx');

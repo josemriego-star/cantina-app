@@ -52,6 +52,7 @@ table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:8px 4px;t
 @media(min-width:700px){html,body{background:#E4EDE4}#app{background:var(--bg);min-height:100vh;box-shadow:0 0 0 1px #D5E3D5,0 12px 40px rgba(27,94,59,.10)}#est{background:#E4EDE4}.est{border-radius:0 0 14px 14px}.bar{box-shadow:0 -1px 0 var(--line)}}
 </style></head><body><div id="est"></div><div id="app"></div>
 <script src="config.js"></script>
+<script src="dialogo.js"></script>
 <script src="imprimir.js"></script>
 <script>
 const DEN=[100000,50000,20000,10000,5000,2000,1000,500,100];
@@ -244,7 +245,7 @@ const MEDIOS=[['efectivo','Efectivo','cash','n'],['pos_debito','POS Débito','ca
 const MN=Object.fromEntries(MEDIOS.map(x=>[x[0],x[1]]));
 function medioPago(k){pend.body.medio=k;delete pend.body.comprobante;if(k.startsWith('pos'))go('boleta');else sigue()}
 function sigue(){if(pend.tipo==='venta'){offConf=!navigator.onLine;confirmar({})}else irConf()}
-function boletaOk(){const v=$('#bo').value.trim();if(!v&&!confirm('¿Seguir sin el número de boleta del POS?'))return;if(v)pend.body.comprobante=v;sigue()}
+async function boletaOk(){const v=$('#bo').value.trim();if(!v&&!(await confirmarSN('¿Seguir sin el número de boleta del POS?')))return;if(v)pend.body.comprobante=v;sigue()}
 function usarPin(){err='';pinScr(sel.nombre+', ingresá tu PIN','client',p=>confirmar({cliente_pin:p}),true)}
 function crearPin(m){err=m||'';pinScr(sel.nombre+', elegí un PIN de 4 a 8 números (que lo escriba el cliente)','client',p=>{pin1=p;pinScr('Repetí el PIN','client',guardarPin)})}
 async function guardarPin(p){
@@ -401,7 +402,7 @@ stock:()=>`${hd('Stock','home')}${S.stk.map(i=>`<div class=row style="cursor:def
 c1:()=>{const t=DEN.reduce((s,d)=>s+d*(cash[d]||0),0);return `${hd('Cerrar caja: efectivo','home')}<p>Contá billetes y monedas.</p>${DEN.map(d=>`<div class=row style="cursor:default"><div>${gs(d)}</div><div class=st><button onclick="cc(${d},-1)">−</button><input class=qi id=q${d} type=text inputmode=numeric value="${cash[d]||0}" onfocus="this.select()" oninput="ccs(${d},this.value)" onblur="this.value=cash[${d}]||0"><button onclick="cc(${d},1)">+</button></div></div>`).join('')}<div class=bar><div><small>Contado</small><strong id=ct>${gs(t)}</strong></div><button class=b onclick="go('cp')">Seguir</button></div>`},
 cp:()=>`${hd('Cerrar caja: POS','c1')}<p>Cierre de lote del POS: escribí el total que imprimió el POS. Si no hubo cobros con POS, dejá 0.</p><p class=mut>POS Débito</p>${mi('ld',lote.d)}<p class=mut>POS Crédito</p>${mi('lc',lote.c)}<button class=b onclick="lote.d=monto('#ld');lote.c=monto('#lc');go('c2')">Seguir</button>`,
 c2:()=>`${hd('Cerrar caja: mercadería','cp')}<p>Contá lo que queda.</p>${S.stk.map(i=>`<div class=row style="cursor:default"><div>${i.nombre}</div><div class=st><button onclick="ci(${i.id},-${pasoDe(i)})">−</button><input class=qi id=i${i.id} type=text inputmode="${pasoDe(i)%1?'decimal':'numeric'}" value="${cnt[i.id]||0}" onfocus="this.select()" oninput="cis(${i.id},this.value)" onblur="this.value=cnt[${i.id}]||0"><button onclick="ci(${i.id},${pasoDe(i)})">+</button></div></div>`).join('')}<div class=bar><div></div><button class="b ok" onclick="cerrar()">Revisar cierre</button></div>`,
-c3:()=>`<h1>Revisá el cierre</h1><p class=er>Hay diferencias. Si contaste mal, corregí antes de terminar.</p>${resHTML()}<button class=b onclick="go('c1')">Corregir efectivo</button><button class=b onclick="go('cp')">Corregir POS</button><button class=b onclick="go('c2')">Corregir mercadería</button><button class="b bad" onclick="if(confirm('¿Cerrar la caja con estas diferencias?'))confirmarCierre()">Confirmar cierre así</button>`,
+c3:()=>`<h1>Revisá el cierre</h1><p class=er>Hay diferencias. Si contaste mal, corregí antes de terminar.</p>${resHTML()}<button class=b onclick="go('c1')">Corregir efectivo</button><button class=b onclick="go('cp')">Corregir POS</button><button class=b onclick="go('c2')">Corregir mercadería</button><button class="b bad" onclick="confirmarSN('¿Cerrar la caja con estas diferencias?').then(ok=>ok&&confirmarCierre())">Confirmar cierre así</button>`,
 c4:()=>`<h1>Resultado del cierre</h1>${resHTML()}<button class="b ok" onclick="salir()">Terminar</button>`,
 prob:()=>`${hd('Sin registrar','home')}<p class=mut>Estas operaciones no se pudieron registrar. Avisale al administrador.</p>${S.prob.map(p=>`<div class=row style="display:block;cursor:default"><b>${p.tipo==='venta'?'Venta':p.tipo==='pago'?'Cobro':p.tipo==='compra'?'Compra':'Gasto'}</b> · ${new Date(p.fecha).toLocaleString('es-PY')}<div class=er>${p.error}</div></div>`).join('')}<button class=b onclick="S.prob=[];save();go('home')">Entendido</button>`
 };
