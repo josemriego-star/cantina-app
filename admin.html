@@ -23,15 +23,15 @@ input,select{font:inherit;padding:9px 10px;border:1px solid #D8D3C5;border-radiu
 .hdr{display:flex;align-items:center;gap:10px;background:#1B5E3B;color:#fff;border-radius:14px;padding:10px 14px;margin-bottom:12px}.hdr h1{margin:0;flex:1;font-size:20px;color:#fff}.hdr .logo{width:42px;height:42px}.hdr .ic{width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center}.hdr .ic img{width:28px;height:28px}.hdr .bt{background:#DFF5E1;color:#1B5E3B;border-color:#DFF5E1}.brand{display:flex;align-items:center;gap:10px;margin:4px 0 8px}.brand img{width:44px;height:44px}.brand b{font-size:24px;color:#1B5E3B}
 .rr{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.rr select{flex:1 1 150px;min-width:0;margin:0}.rr input{width:80px;margin:0}
 </style></head><body><div id="app"></div>
-<script src="config.js?v=26"></script>
-<script src="dialogo.js?v=26"></script>
-<script src="informes.js?v=26"></script>
-<script src="imprimir.js?v=26"></script>
+<script src="config.js?v=28"></script>
+<script src="dialogo.js?v=28"></script>
+<script src="informes.js?v=28"></script>
+<script src="imprimir.js?v=28"></script>
 <script>
 (function(){const m=e=>{const a=document.getElementById('app');if(a&&!a.innerHTML.trim())a.innerHTML='<p style="margin:16px;padding:12px;background:#FAECE7;color:#712B13;border-radius:10px">No se pudo cargar la pantalla ('+String(e&&e.message||e)+'). Recargá la página; si sigue igual, comprobá que estén subidos todos los archivos de la última versión.</p>'};window.addEventListener('error',e=>m(e.error||e.message));window.addEventListener('unhandledrejection',e=>m(e.reason))})();
 const K='cantina_admin';let S={};try{S=JSON.parse(localStorage.getItem(K))||{}}catch(e){}
 const sv=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
-const $=s=>document.querySelector(s),fm=n=>String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),gs=n=>fm(n)+' Gs';
+const $=s=>document.querySelector(s),fm=n=>String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,'.'),gs=n=>'Gs. '+fm(n);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const base=()=>String(window.CANTINA_API||S.api||'').replace(/\/$/,'');
 const MN={efectivo:'Efectivo',pos_debito:'POS Débito',pos_credito:'POS Crédito',transferencia:'Transferencia'};
@@ -305,9 +305,9 @@ const cfgPrevHTML=()=>{const v=PRT.muestra(),w=CFE.ancho_mm===80?300:225;
   return `<style>${PRT.pcss('.pv')}</style><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">${CFE.comanda.imprimir?box('Comanda (ejemplo)',PRT.comanda(CFE,v)):''}${CFE.ticket.imprimir?box('Ticket (ejemplo)',PRT.ticket(CFE,v)):''}</div>${CFE.comanda.imprimir||CFE.ticket.imprimir?'':'<p class=mut>No se imprime nada.</p>'}`};
 const cfgPrev=()=>{const e=$('#cfp');if(e)e.innerHTML=cfgPrevHTML()};
 const cfgDraw=()=>{const e=$('#cfx');if(e)e.innerHTML=cfgHTML()};
-function cfgLogo(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,240/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);let u=c.toDataURL('image/png');if(u.length>240000)u=c.toDataURL('image/jpeg',.85);if(u.length>240000)return alert('La imagen es muy pesada. Probá con otra más chica.');CFE.empresa.logo=u;cfgDraw()};im.onerror=()=>alert('No se pudo leer la imagen');im.src=r.result};r.readAsDataURL(f)}
+function cfgLogo(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,240/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);let u=c.toDataURL('image/png'),f=1;while(u.length>240000&&c.width>60){f*=.8;const c2=document.createElement('canvas');c2.width=Math.round(c.width*f);c2.height=Math.round(c.height*f);c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height);u=c2.toDataURL('image/png')}if(u.length>240000)return alert('La imagen es muy pesada. Probá con otra más chica.');CFE.empresa.logo=u;cfgDraw()};im.onerror=()=>alert('No se pudo leer la imagen');im.src=r.result};r.readAsDataURL(f)}
 function cfgHTML(){const im=CFE.modo==='impreso';
-  return `<div class=cd><b>Empresa</b><p class=mut style="margin:4px 0 10px">El nombre y el logo se muestran arriba en la aplicación y en los estados de cuenta que se envían a los clientes.</p>${tx('empresa','nombre','Nombre de la empresa')}<div class=mut style="margin-top:8px">Logo</div>${CFE.empresa.logo?`<img src="${CFE.empresa.logo}" style="display:block;height:60px;max-width:200px;object-fit:contain;border:1px solid #DDEBDD;border-radius:8px;padding:4px;margin:6px 0;background:#fff">`:'<p class=mut style="margin:4px 0"><small>Sin logo</small></p>'}<input type=file accept="image/*" onchange="cfgLogo(this)" style="margin-top:4px">${CFE.empresa.logo?'<button class="bt s r" onclick="CFE.empresa.logo=\'\';cfgDraw()">Quitar logo</button>':''}</div>
+  return `<div class=cd><b>Empresa</b><p class=mut style="margin:4px 0 10px">El nombre y el logo se muestran arriba en la aplicación y en los estados de cuenta que se envían a los clientes.</p>${tx('empresa','nombre','Nombre de la empresa')}<div class=mut style="margin-top:8px">Logo</div>${CFE.empresa.logo?`<img src="${CFE.empresa.logo}" style="display:block;height:60px;max-width:200px;object-fit:contain;border:1px dashed #CFE0D0;border-radius:8px;padding:4px;margin:6px 0;background:#1B5E3B">`:'<p class=mut style="margin:4px 0"><small>Sin logo</small></p>'}<input type=file accept="image/*" onchange="cfgLogo(this)" style="margin-top:4px"><label class=mut style="display:block;margin:4px 0 8px">Fondo del logo en el encabezado<br><select onchange="CFE.empresa.logo_fondo=this.value"><option value=transparente ${CFE.empresa.logo_fondo!=='blanco'?'selected':''}>Transparente (se ve sobre el verde)</option><option value=blanco ${CFE.empresa.logo_fondo==='blanco'?'selected':''}>Cuadro blanco (si el logo es oscuro)</option></select></label>${CFE.empresa.logo?'<button class="bt s r" onclick="CFE.empresa.logo=\'\';cfgDraw()">Quitar logo</button>':''}</div>
   <div class=cd><b>Modo de venta</b><p class=mut style="margin:4px 0 10px">Define qué pasa al terminar cada venta. La confirmación del cliente con PIN o firma en las ventas a crédito y cobros no cambia.</p>
    <div class=bar><button class="bt ${im?'':'p'}" onclick="cfgS('','modo','pantalla')">Solo pantalla (como ahora)</button><button class="bt ${im?'p':''}" onclick="cfgS('','modo','impreso')">Comanda y ticket impresos</button></div>
    ${im?`<label class=mut>Ancho del papel de la impresora<br><select onchange="cfgS('','ancho_mm',+this.value,1)"><option value=58 ${CFE.ancho_mm===58?'selected':''}>58 mm</option><option value=80 ${CFE.ancho_mm===80?'selected':''}>80 mm</option></select></label>
@@ -319,7 +319,7 @@ function cfgHTML(){const im=CFE.modo==='impreso';
    <div style="margin-top:6px">${ck('ticket','mostrar_empleada','Mostrar quién atendió')}${ck('ticket','mostrar_detalle_combo','Mostrar el detalle de los combos')}</div>${cop('ticket')}</div>
   <div class=cd><b>Vista previa</b> <span class=mut>· con una venta de ejemplo</span><div id=cfp style="margin-top:8px">${cfgPrevHTML()}</div></div>`:''}
   <button class="bt ok" onclick="cfgGuardar()">Guardar configuración</button> ${im?'<button class=bt onclick="cfgProbar()">Imprimir prueba</button>':''}`}
-async function cfgV(){if(!CFE)CFE=await A('/api/config');if(!CFE.empresa)CFE.empresa={nombre:'',logo:''};return `<div id=cfx>${cfgHTML()}</div>`}
+async function cfgV(){if(!CFE)CFE=await A('/api/config');if(!CFE.empresa)CFE.empresa={nombre:'',logo:'',logo_fondo:'transparente'};return `<div id=cfx>${cfgHTML()}</div>`}
 async function cfgGuardar(){try{const{categorias_disponibles,...body}=CFE;CFE=await post('/api/admin/config',body,'PUT');CFGD=CFE;cfgDraw();const hh2=$('#hdr');if(hh2)hh2.innerHTML=hdrHTML();alert('Configuración guardada')}catch(e){alert(e.message)}}
 function cfgProbar(){if(!PRT.imprimir(PRT.venta(CFE,PRT.muestra()),CFE.ancho_mm))alert('Activá la comanda o el ticket para probar la impresión')}
 
@@ -331,7 +331,7 @@ cfg:cfgV,
 hoy:async()=>{
   const d=await A('/api/admin/movimientos'+(F?'?fecha='+F:''));
   const rows=[
-    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']:'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre+(l.variante?' ('+l.variante+')':'')).join(', ')+(v.comprobante?' · Boleta POS: '+v.comprobante:''),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
+    ...d.ventas.map(v=>({k:'ventas',cat:v.tipo,id:v.id,f:v.creada_en,e:v.empleada,t:v.tipo==='contado'?'Venta · '+MN[v.medio||'efectivo']+(v.cliente?' · '+v.cliente:''):'Crédito · '+(v.cliente||''),x:v.lineas.map(l=>l.cantidad+'× '+l.nombre+(l.variante?' ('+l.variante+')':'')).join(', ')+(v.comprobante?' · Boleta POS: '+v.comprobante:''),m:v.total,a:v.anulada,mo:v.motivo_anulacion})),
     ...d.pagos.map(p=>({k:'pagos',cat:'cobros',id:p.id,f:p.creado_en,e:p.empleada,t:'Cobro · '+MN[p.medio||'efectivo'],x:p.cliente+(p.comprobante?' · Boleta POS: '+p.comprobante:''),m:p.monto,a:p.anulado})),
     ...d.compras.map(c=>({k:'compras',cat:'compras',id:c.id,f:c.creado_en,e:c.empleada,t:'Compra · '+c.proveedor,x:'Factura '+c.factura+' · '+c.lineas.map(l=>l.cantidad+' '+l.unidad+' '+l.nombre).join(', ')+(c.de_caja?' · pagada de caja':' · no sale de caja')+(c.falta_costos?' · FALTAN COSTOS':''),m:-c.monto,a:c.anulado})),
     ...d.gastos.map(g=>({k:'gastos',cat:'gastos',id:g.id,f:g.creado_en,e:g.empleada,t:'Gasto',x:g.concepto,m:-g.monto,a:g.anulado}))

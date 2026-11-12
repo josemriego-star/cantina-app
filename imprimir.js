@@ -2,7 +2,7 @@
    Funciona con cualquier impresora que el aparato ya tenga instalada (papel de 58 u 80 mm, o A4 para el estado de cuenta). */
 window.PRT = (function () {
   const n = v => String(Math.round(v || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  const gs = v => n(v) + ' Gs';
+  const gs = v => 'Gs. ' + n(v);
   const e = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fh = d => new Date(d).toLocaleString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const fd = d => new Date(d).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -34,8 +34,8 @@ window.PRT = (function () {
       + ln + `<div class=p-r><span>N° ${e(v.id)}</span><span>${fh(v.fecha)}</span></div>`
       + (t.mostrar_empleada !== false && v.empleada ? `<div>Atendió: ${e(v.empleada)}</div>` : '')
       + (v.cliente ? `<div>Cliente: ${e(v.cliente)}</div>` : '') + ln
-      + (v.lineas || []).map(l => `<div class=p-r><span>${e(l.cant)} x ${e(l.nombre)}</span><span>${n(l.cant * l.precio)}</span></div>`
-        + `<div class=p-ind>${n(l.precio)} c/u</div>` + (t.mostrar_detalle_combo !== false && l.det ? `<div class=p-ind>${e(l.det)}</div>` : '')).join('')
+      + (v.lineas || []).map(l => `<div class=p-r><span>${e(l.cant)} x ${e(l.nombre)}</span><span>${gs(l.cant * l.precio)}</span></div>`
+        + `<div class=p-ind>${gs(l.precio)} c/u</div>` + (t.mostrar_detalle_combo !== false && l.det ? `<div class=p-ind>${e(l.det)}</div>` : '')).join('')
       + ln + `<div class="p-r p-b p-big"><span>TOTAL</span><span>${gs(total)}</span></div>`
       + `<div>${v.tipo === 'credito' ? 'A crédito' : 'Pago: ' + e(MEDIO[v.medio] || 'Efectivo')}</div>`
       + (v.comprobante ? `<div>Boleta POS: ${e(v.comprobante)}</div>` : '')
@@ -50,7 +50,7 @@ window.PRT = (function () {
     const c = ec.cliente, neg = nomEmp(cfg) || (cfg.ticket && cfg.ticket.negocio) || 'Mercator', lg = cfg.empresa && cfg.empresa.logo;
     const filas = ec.movimientos.map(m => {
       const compra = m.tipo === 'compra';
-      const det = compra ? m.lineas.map(l => `${l.cantidad} × ${e(l.nombre)} × ${n(l.precio_unit)}`).join('<br>') : 'Pago recibido';
+      const det = compra ? m.lineas.map(l => `${l.cantidad} × ${e(l.nombre)} × ${gs(l.precio_unit)}`).join('<br>') : 'Pago recibido';
       return `<tr><td>${fd(m.fecha)}</td><td>${compra ? 'Compra a crédito' : 'Pago'}<div class=edet>${det}</div></td><td class=n>${compra ? gs(m.monto) : ''}</td><td class=n>${compra ? '' : gs(m.monto)}</td><td class=n>${gs(m.saldo)}</td></tr>`;
     }).join('');
     return `<div class=ecw>${lg ? `<img src="${lg}" style="height:50px;margin-bottom:6px"><br>` : ''}<h2>${e(neg)} · Estado de cuenta</h2><div class=sub>${e(c.nombre)}${c.empresa ? ' · ' + e(c.empresa) : ''}<br>Cédula: ${e(c.cedula || c.nombre)}${c.telefono ? ' · Tel: ' + e(c.telefono) : ''}<br>Período: ${fdc(ec.desde)} al ${fdc(ec.hasta)}</div>`
@@ -62,7 +62,7 @@ window.PRT = (function () {
   function estadoTexto(cfg, ec) {
     const c = ec.cliente, neg = nomEmp(cfg) || (cfg.ticket && cfg.ticket.negocio) || 'Mercator';
     const mv = ec.movimientos.map(m => m.tipo === 'compra'
-      ? `${fd(m.fecha)} · Compra ${gs(m.monto)}\n` + m.lineas.map(l => `   ${l.cantidad} × ${l.nombre} × ${n(l.precio_unit)}`).join('\n')
+      ? `${fd(m.fecha)} · Compra ${gs(m.monto)}\n` + m.lineas.map(l => `   ${l.cantidad} × ${l.nombre} × ${gs(l.precio_unit)}`).join('\n')
       : `${fd(m.fecha)} · Pago ${gs(m.monto)}`).join('\n');
     return `*${neg} · Estado de cuenta*\nCliente: ${c.nombre}${c.empresa ? ' (' + c.empresa + ')' : ''}\nPeríodo: ${fdc(ec.desde)} al ${fdc(ec.hasta)}\nSaldo anterior: ${gs(ec.saldo_anterior)}\n`
       + (mv ? '\n' + mv + '\n' : '\nSin movimientos en el período\n')
